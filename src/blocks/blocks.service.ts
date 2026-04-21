@@ -12,21 +12,25 @@ export class BlocksService {
 
   async createBlock(params: {
     tenantId: string;
-    name: string;
-    town: string;
+    customerId: string;
+    categoryId: string;
     blockNumber: string;
-    category: string;
-    notes?: string;
+    description?: string;
+    status?: string;
+    remarks?: string;
+    legacyId?: number;
     actorUserId: string;
   }) {
     const block = await this.prisma.block.create({
       data: {
         tenantId: params.tenantId,
-        name: params.name,
-        town: params.town,
+        customerId: params.customerId,
+        categoryId: params.categoryId,
         blockNumber: params.blockNumber,
-        category: params.category,
-        notes: params.notes,
+        description: params.description,
+        status: params.status ?? 'ACTIVE',
+        remarks: params.remarks,
+        legacyId: params.legacyId,
         createdById: params.actorUserId,
         updatedById: params.actorUserId,
       },
@@ -38,20 +42,26 @@ export class BlocksService {
       action: AuditAction.CREATE,
       entityType: 'block',
       entityId: block.id,
-      metadata: { blockNumber: block.blockNumber, category: block.category },
+      metadata: {
+        blockNumber: block.blockNumber,
+        customerId: block.customerId,
+        categoryId: block.categoryId,
+      },
     });
 
-    return block;
+    return this.getBlockById({ id: block.id, tenantId: params.tenantId });
   }
 
   async updateBlock(params: {
     id: string;
     tenantId: string;
-    name?: string;
-    town?: string;
+    customerId?: string;
+    categoryId?: string;
     blockNumber?: string;
-    category?: string;
-    notes?: string | null;
+    description?: string;
+    status?: string;
+    remarks?: string | null;
+    legacyId?: number | null;
     actorUserId: string;
   }) {
     const existing = await this.prisma.block.findFirst({
@@ -62,14 +72,16 @@ export class BlocksService {
       throw new NotFoundException('Block not found');
     }
 
-    const block = await this.prisma.block.update({
+    await this.prisma.block.update({
       where: { id: params.id },
       data: {
-        name: params.name,
-        town: params.town,
+        customerId: params.customerId,
+        categoryId: params.categoryId,
         blockNumber: params.blockNumber,
-        category: params.category,
-        notes: params.notes,
+        description: params.description,
+        status: params.status,
+        remarks: params.remarks,
+        legacyId: params.legacyId,
         updatedById: params.actorUserId,
       },
     });
@@ -79,15 +91,16 @@ export class BlocksService {
       actorUserId: params.actorUserId,
       action: AuditAction.UPDATE,
       entityType: 'block',
-      entityId: block.id,
+      entityId: params.id,
     });
 
-    return block;
+    return this.getBlockById({ id: params.id, tenantId: params.tenantId });
   }
 
   async deleteBlock(params: { id: string; tenantId: string; actorUserId: string }) {
     const existing = await this.prisma.block.findFirst({
       where: { id: params.id, tenantId: params.tenantId },
+      include: { _count: { select: { orderItems: true } } },
     });
 
     if (!existing) {
@@ -102,21 +115,31 @@ export class BlocksService {
       action: AuditAction.DELETE,
       entityType: 'block',
       entityId: params.id,
+      metadata: { orderItemCount: existing._count.orderItems },
     });
   }
 
-  async listBlocks(params: { tenantId: string; search?: string; category?: string }) {
+  async listBlocks(params: { tenantId: string; search?: string; categoryId?: string; customerId?: string; status?: string }) {
     return this.prisma.block.findMany({
       where: {
         tenantId: params.tenantId,
-        category: params.category,
+        categoryId: params.categoryId,
+        customerId: params.customerId,
+        status: params.status,
         OR: params.search
           ? [
-              { name: { contains: params.search, mode: 'insensitive' } },
-              { town: { contains: params.search, mode: 'insensitive' } },
               { blockNumber: { contains: params.search, mode: 'insensitive' } },
+              { description: { contains: params.search, mode: 'insensitive' } },
+              { customer: { fullName: { contains: params.search, mode: 'insensitive' } } },
+              { customer: { phoneNumber: { contains: params.search, mode: 'insensitive' } } },
+              { category: { name: { contains: params.search, mode: 'insensitive' } } },
             ]
           : undefined,
+      },
+      include: {
+        customer: true,
+        category: true,
+        _count: { select: { orderItems: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -125,6 +148,17 @@ export class BlocksService {
   async getBlockById(params: { id: string; tenantId: string }) {
     const block = await this.prisma.block.findFirst({
       where: { id: params.id, tenantId: params.tenantId },
+      include: {
+        customer: true,
+        category: true,
+        orderItems: {
+          include: {
+            order: true,
+            category: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
     });
 
     if (!block) {

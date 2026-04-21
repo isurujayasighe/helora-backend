@@ -12,7 +12,10 @@ import { UsersModule } from './users/users.module';
 import { RolesModule } from './roles/roles.module';
 import { BlocksModule } from './blocks/blocks.module';
 import { AuditModule } from './audit/audit.module';
+import { CustomersModule } from './customers/customers.module';
 import { SessionsModule } from './sessions/sessions.module';
+import { CategoriesModule } from './categories/categories.module';
+import { OrdersModule } from './orders/orders.module';
 import { ConfigModule } from '@nestjs/config/dist/config.module';
 
 @Module({
@@ -38,6 +41,9 @@ import { ConfigModule } from '@nestjs/config/dist/config.module';
     UsersModule,
     RolesModule,
     BlocksModule,
+    CustomersModule,
+    CategoriesModule,
+    OrdersModule,
     AuditModule,
     SessionsModule,
   ],

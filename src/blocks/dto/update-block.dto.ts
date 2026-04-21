@@ -1,23 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { PartialType } from '@nestjs/swagger';
+import { CreateBlockDto } from './create-block.dto';
 
-export class UpdateBlockDto {
-  @IsOptional()
-  @IsString()
-  name?: string;
-
-  @IsOptional()
-  @IsString()
-  town?: string;
-
-  @IsOptional()
-  @IsString()
-  blockNumber?: string;
-
-  @IsOptional()
-  @IsString()
-  category?: string;
-
-  @IsOptional()
-  @IsString()
-  notes?: string;
-}
+export class UpdateBlockDto extends PartialType(CreateBlockDto) {}
