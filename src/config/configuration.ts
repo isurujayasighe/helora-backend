@@ -1,0 +1,15 @@
+export default () => ({
+  port: parseInt(process.env.PORT ?? '3000', 10),
+  nodeEnv: process.env.NODE_ENV ?? 'development',
+  appName: process.env.APP_NAME ?? 'Helora Backend',
+  appOrigin: process.env.APP_ORIGIN ?? 'http://localhost:3001',
+  databaseUrl: process.env.DATABASE_URL,
+  jwtAccessSecret: process.env.JWT_ACCESS_SECRET,
+  jwtRefreshSecret: process.env.JWT_REFRESH_SECRET,
+  jwtAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN ?? '15m',
+  jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? '7d',
+  cookieDomain: process.env.COOKIE_DOMAIN ?? 'localhost',
+  cookieSecure: process.env.COOKIE_SECURE === 'true',
+  throttleTtl: parseInt(process.env.THROTTLE_TTL ?? '60', 10),
+  throttleLimit: parseInt(process.env.THROTTLE_LIMIT ?? '30', 10),
+});

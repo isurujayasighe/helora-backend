@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  DISABLED
+}
+
+enum SessionStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum PermissionAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  MANAGE
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  REFRESH
+  REVOKE
+}
+
+model Tenant {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  memberships Membership[]
+  blocks      Block[]
+  auditLogs   AuditLog[]
+}
+
+model User {
+  id            String        @id @default(cuid())
+  email         String        @unique
+  passwordHash  String
+  firstName     String
+  lastName      String
+  status        UserStatus    @default(ACTIVE)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  memberships   Membership[]
+  sessions      Session[]
+  createdBlocks Block[]       @relation("CreatedBlocks")
+  updatedBlocks Block[]       @relation("UpdatedBlocks")
+  auditLogs     AuditLog[]    @relation("ActorAuditLogs")
+}
+
+model Membership {
+  id        String   @id @default(cuid())
+  userId    String
+  tenantId  String
+  roleId    String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, tenantId])
+}
+
+model Role {
+  id          String       @id @default(cuid())
+  name        String
+  code        String       @unique
+  description String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  memberships Membership[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          String            @id @default(cuid())
+  resource    String
+  action      PermissionAction
+  description String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  roles       RolePermission[]
+
+  @@unique([resource, action])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  assignedAt   DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model Session {
+  id               String        @id @default(cuid())
+  userId           String
+  refreshTokenHash String
+  expiresAt        DateTime
+  status           SessionStatus @default(ACTIVE)
+  userAgent        String?
+  ipAddress        String?
+  lastUsedAt       DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  revokedAt        DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Block {
+  id             String   @id @default(cuid())
+  tenantId       String
+  name           String
+  town           String
+  blockNumber    String
+  category       String
+  notes          String?
+  createdById    String
+  updatedById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy User   @relation("CreatedBlocks", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy User   @relation("UpdatedBlocks", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, category])
+  @@unique([tenantId, blockNumber, category])
+}
+
+model AuditLog {
+  id          String      @id @default(cuid())
+  tenantId     String?
+  actorUserId  String?
+  action       AuditAction
+  entityType   String
+  entityId     String?
+  path         String?
+  method       String?
+  metadata     Json?
+  createdAt    DateTime    @default(now())
+
+  tenant    Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  actorUser User?   @relation("ActorAuditLogs", fields: [actorUserId], references: [id], onDelete: SetNull)
+}
