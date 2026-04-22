@@ -183,30 +183,42 @@ model Category {
 }
 
 model Block {
-  id          String   @id @default(cuid())
-  tenantId    String
-  customerId  String
-  categoryId  String
-  blockNumber String
-  description String?
-  status      String   @default("ACTIVE")
-  remarks     String?
-  legacyId    Int?
-  createdById String
-  updatedById String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String    @id @default(cuid())
+  tenantId        String
+  customerId      String
+  categoryId      String
+  blockNumber     String
+  readyMadeSize   String?
+  sizeLabel       String?
+  fitNotes        String?
+  versionNo       Int       @default(1)
+  previousBlockId String?
+  description     String?
+  status          String    @default("ACTIVE")
+  isDefault       Boolean   @default(false)
+  lastUsedAt      DateTime?
+  remarks         String?
+  legacyId        Int?
+  createdById     String
+  updatedById     String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  category   Category  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  createdBy  User      @relation("CreatedBlocks", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy  User      @relation("UpdatedBlocks", fields: [updatedById], references: [id], onDelete: Restrict)
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer        Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  category        Category  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  previousBlock   Block?    @relation("BlockVersions", fields: [previousBlockId], references: [id], onDelete: SetNull)
+  nextVersions    Block[]   @relation("BlockVersions")
+  createdBy       User      @relation("CreatedBlocks", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy       User      @relation("UpdatedBlocks", fields: [updatedById], references: [id], onDelete: Restrict)
 
-  orderItems OrderItem[]
+  orderItems      OrderItem[]
 
   @@index([tenantId, customerId])
   @@index([tenantId, categoryId])
+  @@index([tenantId, readyMadeSize])
+  @@index([tenantId, customerId, categoryId])
+  @@index([tenantId, customerId, categoryId, readyMadeSize])
   @@unique([tenantId, blockNumber, categoryId])
 }
 

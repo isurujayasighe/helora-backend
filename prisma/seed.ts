@@ -201,15 +201,20 @@ async function main() {
     });
   });
 
-  const sampleBlock = await prisma.block.create({
+  const originalBlouseBlock = await prisma.block.create({
     data: {
       tenantId: tenant.id,
       customerId: sampleCustomer.id,
       categoryId: blouseCategory.id,
       blockNumber: '34-35-B-6',
-      description: 'Sample blouse block',
+      readyMadeSize: 'M',
+      sizeLabel: 'Medium Fit',
+      fitNotes: 'Original blouse block',
+      versionNo: 1,
+      description: 'Original blouse block',
       status: 'ACTIVE',
-      remarks: 'Migrated sample block',
+      isDefault: false,
+      remarks: 'Initial blouse block version',
       legacyId: 52,
       createdById: admin.id,
       updatedById: admin.id,
@@ -224,40 +229,120 @@ async function main() {
     });
   });
 
-  const sampleOrder = await prisma.order.create({
-  data: {
-    tenantId: tenant.id,
-    customerId: sampleCustomer.id,
-    orderNumber: 'ORD-1001',
-    orderDate: new Date(),
-    promisedDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    status: 'PENDING',
-    notes: 'Seed sample order',
-    totalAmount: 2500.0,
-    advanceAmount: 1000.0,
-    balanceAmount: 1500.0,
-    createdById: admin.id,
-    updatedById: admin.id,
-  },
-}).catch(async () => {
-  return prisma.order.findFirstOrThrow({
-    where: {
+  const latestBlouseBlock = await prisma.block.create({
+    data: {
       tenantId: tenant.id,
+      customerId: sampleCustomer.id,
+      categoryId: blouseCategory.id,
+      blockNumber: '34-35-B-6-V2',
+      readyMadeSize: 'L',
+      sizeLabel: 'Adjusted Large Fit',
+      fitNotes: 'Customer body size changed slightly',
+      versionNo: 2,
+      previousBlockId: originalBlouseBlock.id,
+      description: 'Adjusted blouse block',
+      status: 'ACTIVE',
+      isDefault: true,
+      lastUsedAt: new Date(),
+      remarks: 'Latest preferred blouse block',
+      createdById: admin.id,
+      updatedById: admin.id,
+    },
+  }).catch(async () => {
+    return prisma.block.findFirstOrThrow({
+      where: {
+        tenantId: tenant.id,
+        blockNumber: '34-35-B-6-V2',
+        categoryId: blouseCategory.id,
+      },
+    });
+  });
+
+  const uniformBlock = await prisma.block.create({
+    data: {
+      tenantId: tenant.id,
+      customerId: sampleCustomer.id,
+      categoryId: uniformCategory.id,
+      blockNumber: 'UNI-1001',
+      readyMadeSize: 'M',
+      sizeLabel: 'Standard Medium',
+      fitNotes: 'Uniform block for regular fit',
+      versionNo: 1,
+      description: 'Sample uniform block',
+      status: 'ACTIVE',
+      isDefault: true,
+      lastUsedAt: new Date(),
+      remarks: 'Default uniform block',
+      createdById: admin.id,
+      updatedById: admin.id,
+    },
+  }).catch(async () => {
+    return prisma.block.findFirstOrThrow({
+      where: {
+        tenantId: tenant.id,
+        blockNumber: 'UNI-1001',
+        categoryId: uniformCategory.id,
+      },
+    });
+  });
+
+  const sampleOrder = await prisma.order.upsert({
+    where: {
+      tenantId_orderNumber: {
+        tenantId: tenant.id,
+        orderNumber: 'ORD-1001',
+      },
+    },
+    update: {
+      customerId: sampleCustomer.id,
+      orderDate: new Date(),
+      promisedDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      status: 'PENDING',
+      notes: 'Seed sample order',
+      totalAmount: 2500.0,
+      advanceAmount: 1000.0,
+      balanceAmount: 1500.0,
+      updatedById: admin.id,
+    },
+    create: {
+      tenantId: tenant.id,
+      customerId: sampleCustomer.id,
       orderNumber: 'ORD-1001',
+      orderDate: new Date(),
+      promisedDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      status: 'PENDING',
+      notes: 'Seed sample order',
+      totalAmount: 2500.0,
+      advanceAmount: 1000.0,
+      balanceAmount: 1500.0,
+      createdById: admin.id,
+      updatedById: admin.id,
     },
   });
-});
 
   await prisma.orderItem.create({
     data: {
       orderId: sampleOrder.id,
       categoryId: uniformCategory.id,
-      blockId: sampleBlock.id,
+      blockId: uniformBlock.id,
       itemDescription: 'Two uniforms for tailoring order',
       quantity: 2,
       unitPrice: 1250.0,
       lineTotal: 2500.0,
-      notes: 'Seed sample order item',
+      notes: 'Seed sample uniform order item',
+    },
+  }).catch(() => null);
+
+  await prisma.orderItem.create({
+    data: {
+      orderId: sampleOrder.id,
+      categoryId: blouseCategory.id,
+      blockId: latestBlouseBlock.id,
+      itemDescription: 'One blouse using latest adjusted block',
+      quantity: 1,
+      unitPrice: 1800.0,
+      lineTotal: 1800.0,
+      notes: 'Seed sample blouse order item',
     },
   }).catch(() => null);
 
