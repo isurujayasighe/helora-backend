@@ -7,11 +7,13 @@ import { UpdateCustomerHandler } from './commands/handlers/update-customer.handl
 import { DeleteCustomerHandler } from './commands/handlers/delete-customer.handler';
 import { ListCustomersHandler } from './queries/handlers/list-customers.handler';
 import { GetCustomerByIdHandler } from './queries/handlers/get-customer-by-id.handler';
+import { FindCustomerByPhoneHandler } from './queries/handlers/find-customer-by-handler';
 
 const commandHandlers = [
   CreateCustomerHandler,
   UpdateCustomerHandler,
   DeleteCustomerHandler,
+  FindCustomerByPhoneHandler,
 ];
 const queryHandlers = [ListCustomersHandler, GetCustomerByIdHandler];
 

@@ -9,7 +9,7 @@ export class CreateCustomerHandler implements ICommandHandler<CreateCustomerComm
   async execute(command: CreateCustomerCommand) {
     const customer = await this.customersService.createCustomer({
       tenantId: command.currentUser.tenantId,
-      actorUserId: command.currentUser.sub,
+      actorUserId: command.currentUser.userId,
       ...command.payload,
     });
 

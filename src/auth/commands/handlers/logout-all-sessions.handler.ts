@@ -7,7 +7,7 @@ export class LogoutAllSessionsHandler implements ICommandHandler<LogoutAllSessio
   constructor(private readonly authService: AuthService) {}
 
   async execute(command: LogoutAllSessionsCommand) {
-    await this.authService.logoutAll(command.currentUser.sub);
+    await this.authService.logoutAll(command.currentUser.userId);
     this.authService.clearRefreshCookie(command.response);
 
     return {

@@ -10,7 +10,7 @@ export class UpdateOrderHandler implements ICommandHandler<UpdateOrderCommand> {
     const order = await this.ordersService.updateOrder({
       id: command.id,
       tenantId: command.currentUser.tenantId,
-      actorUserId: command.currentUser.sub,
+      actorUserId: command.currentUser.userId,
       ...command.payload,
     });
 

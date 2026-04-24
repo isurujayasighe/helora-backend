@@ -17,14 +17,19 @@ import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { Permissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CurrentUserContext } from '../common/types/current-user-context.type';
+
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { ListCustomersDto } from './dto/list-customers.dto';
+import { FindCustomerByPhoneDto } from './dto/find-customer-by-phone-number-dto';
+
 import { CreateCustomerCommand } from './commands/impl/create-customer.command';
 import { UpdateCustomerCommand } from './commands/impl/update-customer.command';
 import { DeleteCustomerCommand } from './commands/impl/delete-customer.command';
+
 import { ListCustomersQuery } from './queries/impl/list-customers.query';
 import { GetCustomerByIdQuery } from './queries/impl/get-customer-by-id.query';
+import { FindCustomerByPhoneQuery } from './queries/impl/find-customer-by-phone-query';
 
 @ApiTags('Customers')
 @ApiBearerAuth()
@@ -58,8 +63,23 @@ export class CustomersController {
 
   @Version('1')
   @Permissions('customers:read')
+  @Get('by-phone')
+  async findByPhone(
+    @CurrentUser() currentUser: CurrentUserContext,
+    @Query() dto: FindCustomerByPhoneDto,
+  ) {
+    return this.queryBus.execute(
+      new FindCustomerByPhoneQuery(currentUser, dto.phoneNumber),
+    );
+  }
+
+  @Version('1')
+  @Permissions('customers:read')
   @Get(':id')
-  async getById(@CurrentUser() currentUser: CurrentUserContext, @Param('id') id: string) {
+  async getById(
+    @CurrentUser() currentUser: CurrentUserContext,
+    @Param('id') id: string,
+  ) {
     return this.queryBus.execute(new GetCustomerByIdQuery(currentUser, id));
   }
 
@@ -71,13 +91,18 @@ export class CustomersController {
     @Param('id') id: string,
     @Body() body: UpdateCustomerDto,
   ) {
-    return this.commandBus.execute(new UpdateCustomerCommand(currentUser, id, body));
+    return this.commandBus.execute(
+      new UpdateCustomerCommand(currentUser, id, body),
+    );
   }
 
   @Version('1')
   @Permissions('customers:delete')
   @Delete(':id')
-  async remove(@CurrentUser() currentUser: CurrentUserContext, @Param('id') id: string) {
+  async remove(
+    @CurrentUser() currentUser: CurrentUserContext,
+    @Param('id') id: string,
+  ) {
     return this.commandBus.execute(new DeleteCustomerCommand(currentUser, id));
   }
 }

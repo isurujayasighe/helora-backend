@@ -10,7 +10,7 @@ export class DeleteCustomerHandler implements ICommandHandler<DeleteCustomerComm
     await this.customersService.deleteCustomer({
       id: command.id,
       tenantId: command.currentUser.tenantId,
-      actorUserId: command.currentUser.sub,
+      actorUserId: command.currentUser.userId,
     });
 
     return {

@@ -11,71 +11,74 @@ export class OrdersService {
   ) {}
 
   async createOrder(params: {
-    tenantId: string;
-    customerId: string;
-    orderNumber: string;
-    orderDate?: string;
-    promisedDate?: string;
-    status?: string;
+  tenantId: string;
+  customerId: string;
+  orderNumber: string;
+  orderDate?: string;
+  promisedDate?: string;
+  status?: string;
+  orderSource?: "DREZAURA" | "PHYSICAL_SHOP";
+  notes?: string;
+  totalAmount?: number;
+  advanceAmount?: number;
+  balanceAmount?: number;
+  items: Array<{
+    categoryId: string;
+    blockId?: string;
+    itemDescription?: string;
+    quantity: number;
+    unitPrice?: number;
+    lineTotal?: number;
     notes?: string;
-    totalAmount?: number;
-    advanceAmount?: number;
-    balanceAmount?: number;
-    items: Array<{
-      categoryId: string;
-      blockId?: string;
-      itemDescription?: string;
-      quantity: number;
-      unitPrice?: number;
-      lineTotal?: number;
-      notes?: string;
-    }>;
-    actorUserId: string;
-  }) {
-    const order = await this.prisma.order.create({
-      data: {
-        tenantId: params.tenantId,
-        customerId: params.customerId,
-        orderNumber: params.orderNumber,
-        orderDate: params.orderDate ? new Date(params.orderDate) : new Date(),
-        promisedDate: params.promisedDate
-          ? new Date(params.promisedDate)
-          : undefined,
-        status: params.status ?? "PENDING",
-        notes: params.notes,
-        totalAmount: params.totalAmount,
-        advanceAmount: params.advanceAmount,
-        balanceAmount: params.balanceAmount,
-        createdById: params.actorUserId,
-        updatedById: params.actorUserId,
-        items: {
-          create: params.items.map((item) => ({
-            categoryId: item.categoryId,
-            blockId: item.blockId,
-            itemDescription: item.itemDescription,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            lineTotal: item.lineTotal,
-            notes: item.notes,
-          })),
-        },
-      },
-    });
-
-    await this.auditService.log({
+  }>;
+  actorUserId: string;
+}) {
+  const order = await this.prisma.order.create({
+    data: {
       tenantId: params.tenantId,
-      actorUserId: params.actorUserId,
-      action: AuditAction.CREATE,
-      entityType: "order",
-      entityId: order.id,
-      metadata: {
-        orderNumber: params.orderNumber,
-        itemCount: params.items.length,
+      customerId: params.customerId,
+      orderNumber: params.orderNumber,
+      orderDate: params.orderDate ? new Date(params.orderDate) : new Date(),
+      promisedDate: params.promisedDate
+        ? new Date(params.promisedDate)
+        : undefined,
+      status: params.status ?? "PENDING",
+      orderSource: params.orderSource ?? "PHYSICAL_SHOP",
+      notes: params.notes,
+      totalAmount: params.totalAmount,
+      advanceAmount: params.advanceAmount,
+      balanceAmount: params.balanceAmount,
+      createdById: params.actorUserId,
+      updatedById: params.actorUserId,
+      items: {
+        create: params.items.map((item) => ({
+          categoryId: item.categoryId,
+          blockId: item.blockId,
+          itemDescription: item.itemDescription,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          lineTotal: item.lineTotal,
+          notes: item.notes,
+        })),
       },
-    });
+    },
+  });
 
-    return this.getOrderById({ id: order.id, tenantId: params.tenantId });
-  }
+  await this.auditService.log({
+    tenantId: params.tenantId,
+    actorUserId: params.actorUserId,
+    action: AuditAction.CREATE,
+    entityType: "order",
+    entityId: order.id,
+    metadata: {
+      orderNumber: params.orderNumber,
+      orderSource: params.orderSource ?? "PHYSICAL_SHOP",
+      itemCount: params.items.length,
+    },
+  });
+
+  return this.getOrderById({ id: order.id, tenantId: params.tenantId });
+}
 
   async updateOrder(params: {
     id: string;
@@ -306,29 +309,34 @@ export class OrdersService {
   }
 
   async getOrderById(params: { id: string; tenantId: string }) {
-    const order = await this.prisma.order.findFirst({
-      where: { id: params.id, tenantId: params.tenantId },
-      include: {
-        customer: true,
-        items: {
-          include: {
-            category: true,
-            block: {
-              include: {
-                customer: true,
-                category: true,
+  const order = await this.prisma.order.findFirst({
+    where: { id: params.id, tenantId: params.tenantId },
+    include: {
+      customer: true,
+      items: {
+        include: {
+          category: true,
+          block: {
+            include: {
+              category: true,
+              customerBlocks: {
+                include: {
+                  customer: true,
+                },
+                orderBy: [{ isDefault: 'desc' }, { assignedAt: 'asc' }],
               },
             },
           },
-          orderBy: { createdAt: "asc" },
         },
+        orderBy: { createdAt: 'asc' },
       },
-    });
+    },
+  });
 
-    if (!order) {
-      throw new NotFoundException("Order not found");
-    }
-
-    return order;
+  if (!order) {
+    throw new NotFoundException('Order not found');
   }
+
+  return order;
+}
 }

@@ -10,7 +10,7 @@ export class UpdateCustomerHandler implements ICommandHandler<UpdateCustomerComm
     const customer = await this.customersService.updateCustomer({
       id: command.id,
       tenantId: command.currentUser.tenantId,
-      actorUserId: command.currentUser.sub,
+      actorUserId: command.currentUser.userId,
       ...command.payload,
     });
 

@@ -9,7 +9,7 @@ export class CreateCategoryHandler implements ICommandHandler<CreateCategoryComm
   async execute(command: CreateCategoryCommand) {
     const category = await this.categoriesService.createCategory({
       tenantId: command.currentUser.tenantId,
-      actorUserId: command.currentUser.sub,
+      actorUserId: command.currentUser.userId,
       ...command.payload,
     });
 

@@ -10,7 +10,7 @@ export class DeleteBlockHandler implements ICommandHandler<DeleteBlockCommand> {
     await this.blocksService.deleteBlock({
       id: command.id,
       tenantId: command.currentUser.tenantId,
-      actorUserId: command.currentUser.sub,
+      actorUserId: command.currentUser.userId,
     });
 
     return {

@@ -1,5 +1,5 @@
 export type CurrentUserContext = {
-  sub: string;
+  userId: string;
   email: string;
   tenantId: string;
   sessionId: string;

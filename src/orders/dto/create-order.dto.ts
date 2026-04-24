@@ -1,7 +1,21 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsDateString, IsNotEmpty, IsOptional, IsString, ValidateNested } from 'class-validator';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsDateString,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
 import { CreateOrderItemDto } from './create-order-item.dto';
+
+export enum OrderSource {
+  DREZAURA = 'DREZAURA',
+  PHYSICAL_SHOP = 'PHYSICAL_SHOP',
+}
 
 export class CreateOrderDto {
   @ApiProperty({ example: 'customer_cuid' })
@@ -28,6 +42,15 @@ export class CreateOrderDto {
   @IsOptional()
   @IsString()
   status?: string;
+
+  @ApiPropertyOptional({
+    enum: OrderSource,
+    example: OrderSource.PHYSICAL_SHOP,
+    default: OrderSource.PHYSICAL_SHOP,
+  })
+  @IsOptional()
+  @IsEnum(OrderSource)
+  orderSource?: OrderSource;
 
   @ApiPropertyOptional({ example: 'Order for 2 uniforms' })
   @IsOptional()

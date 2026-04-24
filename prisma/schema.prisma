@@ -156,15 +156,12 @@ model Customer {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  createdBy User    @relation("CreatedCustomers", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy User    @relation("UpdatedCustomers", fields: [updatedById], references: [id], onDelete: Restrict)
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy      User           @relation("CreatedCustomers", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy      User           @relation("UpdatedCustomers", fields: [updatedById], references: [id], onDelete: Restrict)
 
-  blocks    Block[]
-  orders    Order[]
-
-  @@index([tenantId, fullName])
-  @@index([tenantId, phoneNumber])
+  customerBlocks CustomerBlock[]
+  orders         Order[]
 }
 
 model Category {
@@ -185,7 +182,6 @@ model Category {
 model Block {
   id              String    @id @default(cuid())
   tenantId        String
-  customerId      String
   categoryId      String
   blockNumber     String
   readyMadeSize   String?
@@ -195,7 +191,6 @@ model Block {
   previousBlockId String?
   description     String?
   status          String    @default("ACTIVE")
-  isDefault       Boolean   @default(false)
   lastUsedAt      DateTime?
   remarks         String?
   legacyId        Int?
@@ -204,40 +199,58 @@ model Block {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  customer        Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  category        Category  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  previousBlock   Block?    @relation("BlockVersions", fields: [previousBlockId], references: [id], onDelete: SetNull)
-  nextVersions    Block[]   @relation("BlockVersions")
-  createdBy       User      @relation("CreatedBlocks", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy       User      @relation("UpdatedBlocks", fields: [updatedById], references: [id], onDelete: Restrict)
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category       Category  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  previousBlock  Block?    @relation("BlockVersions", fields: [previousBlockId], references: [id], onDelete: SetNull)
+  nextVersions   Block[]   @relation("BlockVersions")
+  createdBy      User      @relation("CreatedBlocks", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy      User      @relation("UpdatedBlocks", fields: [updatedById], references: [id], onDelete: Restrict)
 
-  orderItems      OrderItem[]
+  customerBlocks CustomerBlock[]
+  orderItems     OrderItem[]
 
-  @@index([tenantId, customerId])
   @@index([tenantId, categoryId])
   @@index([tenantId, readyMadeSize])
-  @@index([tenantId, customerId, categoryId])
-  @@index([tenantId, customerId, categoryId, readyMadeSize])
   @@unique([tenantId, blockNumber, categoryId])
 }
 
+model CustomerBlock {
+  customerId    String
+  blockId       String
+  isDefault     Boolean  @default(false)
+  assignedAt    DateTime @default(now())
+  assignedById  String?
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  block    Block    @relation(fields: [blockId], references: [id], onDelete: Cascade)
+
+  @@id([customerId, blockId])
+  @@index([blockId])
+  @@index([customerId])
+}
+
+enum OrderSource {
+  DREZAURA
+  PHYSICAL_SHOP
+}
+
 model Order {
-  id            String    @id @default(cuid())
+  id            String      @id @default(cuid())
   tenantId      String
   customerId    String
   orderNumber   String
   orderDate     DateTime
   promisedDate  DateTime?
-  status        String    @default("PENDING")
+  status        String      @default("PENDING")
+  orderSource   OrderSource @default(PHYSICAL_SHOP)
   notes         String?
-  totalAmount   Decimal?  @db.Decimal(12, 2)
-  advanceAmount Decimal?  @db.Decimal(12, 2)
-  balanceAmount Decimal?  @db.Decimal(12, 2)
+  totalAmount   Decimal?    @db.Decimal(12, 2)
+  advanceAmount Decimal?    @db.Decimal(12, 2)
+  balanceAmount Decimal?    @db.Decimal(12, 2)
   createdById   String
   updatedById   String
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   customer   Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
@@ -250,6 +263,7 @@ model Order {
   @@index([tenantId, orderDate])
   @@index([tenantId, promisedDate])
   @@index([tenantId, customerId])
+  @@index([tenantId, orderSource])
 }
 
 model OrderItem {

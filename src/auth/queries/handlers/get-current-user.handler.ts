@@ -8,7 +8,7 @@ export class GetCurrentUserHandler implements IQueryHandler<GetCurrentUserQuery>
 
   async execute(query: GetCurrentUserQuery) {
     const user = await this.authService.getCurrentUser(
-      query.currentUser.sub,
+      query.currentUser.userId,
       query.currentUser.tenantId,
     );
 

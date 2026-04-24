@@ -10,7 +10,7 @@ export class DeleteCategoryHandler implements ICommandHandler<DeleteCategoryComm
     await this.categoriesService.deleteCategory({
       id: command.id,
       tenantId: command.currentUser.tenantId,
-      actorUserId: command.currentUser.sub,
+      actorUserId: command.currentUser.userId,
     });
 
     return {

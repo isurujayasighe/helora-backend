@@ -106,7 +106,7 @@ export class AuthService {
     });
 
     const accessPayload: CurrentUserContext = {
-      sub: params.userId,
+      userId: params.userId,
       email: params.email,
       tenantId: params.tenantId,
       sessionId: session.id,
@@ -205,7 +205,7 @@ export class AuthService {
     );
 
     const accessToken = this.buildAccessToken({
-      sub: payload.sub,
+      userId: payload.sub,
       email: payload.email,
       tenantId: payload.tenantId,
       sessionId: session.id,

@@ -181,109 +181,218 @@ async function main() {
     },
   });
 
-  const sampleCustomer = await prisma.customer.create({
-    data: {
-      tenantId: tenant.id,
-      fullName: 'Dinesha Shamali',
-      phoneNumber: '0718370292',
-      town: 'Pasgoda',
-      notes: 'Seed sample customer',
-      createdById: admin.id,
-      updatedById: admin.id,
-    },
-  }).catch(async () => {
-    return prisma.customer.findFirstOrThrow({
-      where: {
+  const sampleCustomer = await prisma.customer
+    .create({
+      data: {
         tenantId: tenant.id,
         fullName: 'Dinesha Shamali',
         phoneNumber: '0718370292',
+        town: 'Pasgoda',
+        notes: 'Seed sample customer',
+        createdById: admin.id,
+        updatedById: admin.id,
       },
+    })
+    .catch(async () => {
+      return prisma.customer.findFirstOrThrow({
+        where: {
+          tenantId: tenant.id,
+          fullName: 'Dinesha Shamali',
+          phoneNumber: '0718370292',
+        },
+      });
     });
-  });
 
-  const originalBlouseBlock = await prisma.block.create({
-    data: {
-      tenantId: tenant.id,
-      customerId: sampleCustomer.id,
-      categoryId: blouseCategory.id,
-      blockNumber: '34-35-B-6',
-      readyMadeSize: 'M',
-      sizeLabel: 'Medium Fit',
-      fitNotes: 'Original blouse block',
-      versionNo: 1,
-      description: 'Original blouse block',
-      status: 'ACTIVE',
-      isDefault: false,
-      remarks: 'Initial blouse block version',
-      legacyId: 52,
-      createdById: admin.id,
-      updatedById: admin.id,
-    },
-  }).catch(async () => {
-    return prisma.block.findFirstOrThrow({
-      where: {
+  const secondCustomer = await prisma.customer
+    .create({
+      data: {
         tenantId: tenant.id,
+        fullName: 'U.ROSHANI BUDDHIKA',
+        phoneNumber: '0768359293',
+        alternatePhone: '0768359293',
+        town: 'HORANA',
+        address: 'No 12, Main Street',
+        notes: 'VIP customer',
+        createdById: admin.id,
+        updatedById: admin.id,
+      },
+    })
+    .catch(async () => {
+      return prisma.customer.findFirstOrThrow({
+        where: {
+          tenantId: tenant.id,
+          fullName: 'U.ROSHANI BUDDHIKA',
+          phoneNumber: '0768359293',
+        },
+      });
+    });
+
+  const originalBlouseBlock = await prisma.block
+    .create({
+      data: {
+        tenantId: tenant.id,
+        categoryId: blouseCategory.id,
         blockNumber: '34-35-B-6',
-        categoryId: blouseCategory.id,
+        readyMadeSize: 'M',
+        sizeLabel: 'Medium Fit',
+        fitNotes: 'Original blouse block',
+        versionNo: 1,
+        description: 'Original blouse block',
+        status: 'ACTIVE',
+        remarks: 'Initial blouse block version',
+        legacyId: 52,
+        createdById: admin.id,
+        updatedById: admin.id,
       },
-    });
-  });
-
-  const latestBlouseBlock = await prisma.block.create({
-    data: {
+    })
+    .catch(async () => {
+      return prisma.block.findUniqueOrThrow({
+  where: {
+    tenantId_blockNumber_categoryId: {
       tenantId: tenant.id,
-      customerId: sampleCustomer.id,
-      categoryId: blouseCategory.id,
-      blockNumber: '34-35-B-6-V2',
-      readyMadeSize: 'L',
-      sizeLabel: 'Adjusted Large Fit',
-      fitNotes: 'Customer body size changed slightly',
-      versionNo: 2,
-      previousBlockId: originalBlouseBlock.id,
-      description: 'Adjusted blouse block',
-      status: 'ACTIVE',
-      isDefault: true,
-      lastUsedAt: new Date(),
-      remarks: 'Latest preferred blouse block',
-      createdById: admin.id,
-      updatedById: admin.id,
-    },
-  }).catch(async () => {
-    return prisma.block.findFirstOrThrow({
-      where: {
-        tenantId: tenant.id,
-        blockNumber: '34-35-B-6-V2',
-        categoryId: blouseCategory.id,
-      },
-    });
-  });
-
-  const uniformBlock = await prisma.block.create({
-    data: {
-      tenantId: tenant.id,
-      customerId: sampleCustomer.id,
-      categoryId: uniformCategory.id,
       blockNumber: 'UNI-1001',
-      readyMadeSize: 'M',
-      sizeLabel: 'Standard Medium',
-      fitNotes: 'Uniform block for regular fit',
-      versionNo: 1,
-      description: 'Sample uniform block',
-      status: 'ACTIVE',
-      isDefault: true,
-      lastUsedAt: new Date(),
-      remarks: 'Default uniform block',
-      createdById: admin.id,
-      updatedById: admin.id,
+      categoryId: uniformCategory.id,
     },
-  }).catch(async () => {
-    return prisma.block.findFirstOrThrow({
-      where: {
-        tenantId: tenant.id,
-        blockNumber: 'UNI-1001',
-        categoryId: uniformCategory.id,
-      },
+  },
+});
     });
+
+  const latestBlouseBlock = await prisma.block
+    .create({
+      data: {
+        tenantId: tenant.id,
+        categoryId: blouseCategory.id,
+        blockNumber: '34-35-B-6-V2',
+        readyMadeSize: 'L',
+        sizeLabel: 'Adjusted Large Fit',
+        fitNotes: 'Customer body size changed slightly',
+        versionNo: 2,
+        previousBlockId: originalBlouseBlock.id,
+        description: 'Adjusted blouse block',
+        status: 'ACTIVE',
+        lastUsedAt: new Date(),
+        remarks: 'Latest preferred blouse block',
+        createdById: admin.id,
+        updatedById: admin.id,
+      },
+    })
+    .catch(async () => {
+      return prisma.block.findUniqueOrThrow({
+        where: {
+          tenantId_blockNumber_categoryId: {
+            tenantId: tenant.id,
+            blockNumber: '34-35-B-6-V2',
+            categoryId: blouseCategory.id,
+          },
+        },
+      });
+    });
+
+  const uniformBlock = await prisma.block
+    .create({
+      data: {
+        tenantId: tenant.id,
+        categoryId: uniformCategory.id,
+        blockNumber: 'UNI-1001',
+        readyMadeSize: 'M',
+        sizeLabel: 'Standard Medium',
+        fitNotes: 'Uniform block for regular fit',
+        versionNo: 1,
+        description: 'Sample uniform block',
+        status: 'ACTIVE',
+        lastUsedAt: new Date(),
+        remarks: 'Default uniform block',
+        createdById: admin.id,
+        updatedById: admin.id,
+      },
+    })
+    .catch(async () => {
+      return prisma.block.findUniqueOrThrow({
+        where: {
+          tenantId_blockNumber_categoryId: {
+            tenantId: tenant.id,
+            blockNumber: 'UNI-1001',
+            categoryId: uniformCategory.id,
+          },
+        },
+      });
+    });
+
+  await prisma.customerBlock.upsert({
+    where: {
+      customerId_blockId: {
+        customerId: sampleCustomer.id,
+        blockId: originalBlouseBlock.id,
+      },
+    },
+    update: {
+      isDefault: false,
+      assignedById: admin.id,
+    },
+    create: {
+      customerId: sampleCustomer.id,
+      blockId: originalBlouseBlock.id,
+      isDefault: false,
+      assignedById: admin.id,
+    },
+  });
+
+  await prisma.customerBlock.upsert({
+    where: {
+      customerId_blockId: {
+        customerId: sampleCustomer.id,
+        blockId: latestBlouseBlock.id,
+      },
+    },
+    update: {
+      isDefault: true,
+      assignedById: admin.id,
+    },
+    create: {
+      customerId: sampleCustomer.id,
+      blockId: latestBlouseBlock.id,
+      isDefault: true,
+      assignedById: admin.id,
+    },
+  });
+
+  await prisma.customerBlock.upsert({
+    where: {
+      customerId_blockId: {
+        customerId: sampleCustomer.id,
+        blockId: uniformBlock.id,
+      },
+    },
+    update: {
+      isDefault: true,
+      assignedById: admin.id,
+    },
+    create: {
+      customerId: sampleCustomer.id,
+      blockId: uniformBlock.id,
+      isDefault: true,
+      assignedById: admin.id,
+    },
+  });
+
+  // shared block assignment example
+  await prisma.customerBlock.upsert({
+    where: {
+      customerId_blockId: {
+        customerId: secondCustomer.id,
+        blockId: uniformBlock.id,
+      },
+    },
+    update: {
+      isDefault: true,
+      assignedById: admin.id,
+    },
+    create: {
+      customerId: secondCustomer.id,
+      blockId: uniformBlock.id,
+      isDefault: true,
+      assignedById: admin.id,
+    },
   });
 
   const sampleOrder = await prisma.order.upsert({
@@ -298,6 +407,7 @@ async function main() {
       orderDate: new Date(),
       promisedDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       status: 'PENDING',
+      orderSource: 'PHYSICAL_SHOP',
       notes: 'Seed sample order',
       totalAmount: 2500.0,
       advanceAmount: 1000.0,
@@ -311,6 +421,7 @@ async function main() {
       orderDate: new Date(),
       promisedDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       status: 'PENDING',
+      orderSource: 'PHYSICAL_SHOP',
       notes: 'Seed sample order',
       totalAmount: 2500.0,
       advanceAmount: 1000.0,
@@ -320,31 +431,35 @@ async function main() {
     },
   });
 
-  await prisma.orderItem.create({
-    data: {
-      orderId: sampleOrder.id,
-      categoryId: uniformCategory.id,
-      blockId: uniformBlock.id,
-      itemDescription: 'Two uniforms for tailoring order',
-      quantity: 2,
-      unitPrice: 1250.0,
-      lineTotal: 2500.0,
-      notes: 'Seed sample uniform order item',
-    },
-  }).catch(() => null);
+  await prisma.orderItem
+    .create({
+      data: {
+        orderId: sampleOrder.id,
+        categoryId: uniformCategory.id,
+        blockId: uniformBlock.id,
+        itemDescription: 'Two uniforms for tailoring order',
+        quantity: 2,
+        unitPrice: 1250.0,
+        lineTotal: 2500.0,
+        notes: 'Seed sample uniform order item',
+      },
+    })
+    .catch(() => null);
 
-  await prisma.orderItem.create({
-    data: {
-      orderId: sampleOrder.id,
-      categoryId: blouseCategory.id,
-      blockId: latestBlouseBlock.id,
-      itemDescription: 'One blouse using latest adjusted block',
-      quantity: 1,
-      unitPrice: 1800.0,
-      lineTotal: 1800.0,
-      notes: 'Seed sample blouse order item',
-    },
-  }).catch(() => null);
+  await prisma.orderItem
+    .create({
+      data: {
+        orderId: sampleOrder.id,
+        categoryId: blouseCategory.id,
+        blockId: latestBlouseBlock.id,
+        itemDescription: 'One blouse using latest adjusted block',
+        quantity: 1,
+        unitPrice: 1800.0,
+        lineTotal: 1800.0,
+        notes: 'Seed sample blouse order item',
+      },
+    })
+    .catch(() => null);
 
   console.log('Seed completed');
 }

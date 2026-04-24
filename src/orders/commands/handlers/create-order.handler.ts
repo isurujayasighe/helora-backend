@@ -9,7 +9,7 @@ export class CreateOrderHandler implements ICommandHandler<CreateOrderCommand> {
   async execute(command: CreateOrderCommand) {
     const order = await this.ordersService.createOrder({
       tenantId: command.currentUser.tenantId,
-      actorUserId: command.currentUser.sub,
+      actorUserId: command.currentUser.userId,
       ...command.payload,
     });
 

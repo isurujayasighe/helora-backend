@@ -32,6 +32,14 @@ export class CustomersService {
         createdById: params.actorUserId,
         updatedById: params.actorUserId,
       },
+      include: {
+        _count: {
+          select: {
+            customerBlocks: true,
+            orders: true,
+          },
+        },
+      },
     });
 
     await this.auditService.log({
@@ -46,29 +54,33 @@ export class CustomersService {
       },
     });
 
-    return this.getCustomerById({ id: customer.id, tenantId: params.tenantId });
+    return customer;
   }
 
   async updateCustomer(params: {
     id: string;
     tenantId: string;
     fullName?: string;
-    phoneNumber?: string | null;
-    alternatePhone?: string | null;
-    town?: string | null;
-    address?: string | null;
-    notes?: string | null;
+    phoneNumber?: string;
+    alternatePhone?: string;
+    town?: string;
+    address?: string;
+    notes?: string;
     actorUserId: string;
   }) {
     const existing = await this.prisma.customer.findFirst({
-      where: { id: params.id, tenantId: params.tenantId },
+      where: {
+        id: params.id,
+        tenantId: params.tenantId,
+      },
+      select: { id: true },
     });
 
     if (!existing) {
       throw new NotFoundException('Customer not found');
     }
 
-    await this.prisma.customer.update({
+    const customer = await this.prisma.customer.update({
       where: { id: params.id },
       data: {
         fullName: params.fullName,
@@ -79,6 +91,14 @@ export class CustomersService {
         notes: params.notes,
         updatedById: params.actorUserId,
       },
+      include: {
+        _count: {
+          select: {
+            customerBlocks: true,
+            orders: true,
+          },
+        },
+      },
     });
 
     await this.auditService.log({
@@ -86,19 +106,27 @@ export class CustomersService {
       actorUserId: params.actorUserId,
       action: AuditAction.UPDATE,
       entityType: 'customer',
-      entityId: params.id,
+      entityId: customer.id,
+      metadata: {
+        fullName: customer.fullName,
+        phoneNumber: customer.phoneNumber,
+      },
     });
 
-    return this.getCustomerById({ id: params.id, tenantId: params.tenantId });
+    return customer;
   }
 
-  async deleteCustomer(params: { id: string; tenantId: string; actorUserId: string }) {
+  async deleteCustomer(params: {
+    id: string;
+    tenantId: string;
+    actorUserId: string;
+  }) {
     const existing = await this.prisma.customer.findFirst({
       where: { id: params.id, tenantId: params.tenantId },
       include: {
         _count: {
           select: {
-            blocks: true,
+            customerBlocks: true,
             orders: true,
           },
         },
@@ -109,7 +137,9 @@ export class CustomersService {
       throw new NotFoundException('Customer not found');
     }
 
-    await this.prisma.customer.delete({ where: { id: params.id } });
+    await this.prisma.customer.delete({
+      where: { id: params.id },
+    });
 
     await this.auditService.log({
       tenantId: params.tenantId,
@@ -118,54 +148,108 @@ export class CustomersService {
       entityType: 'customer',
       entityId: params.id,
       metadata: {
-        blockCount: existing._count.blocks,
+        blockCount: existing._count.customerBlocks,
         orderCount: existing._count.orders,
       },
     });
   }
 
-  async listCustomers(params: { tenantId: string; search?: string; town?: string }) {
-    return this.prisma.customer.findMany({
-      where: {
-        tenantId: params.tenantId,
-        town: params.town,
-        OR: params.search
-          ? [
-              { fullName: { contains: params.search, mode: 'insensitive' } },
-              { phoneNumber: { contains: params.search, mode: 'insensitive' } },
-              { alternatePhone: { contains: params.search, mode: 'insensitive' } },
-              { town: { contains: params.search, mode: 'insensitive' } },
-            ]
-          : undefined,
-      },
-      include: {
-        _count: {
-          select: {
-            blocks: true,
-            orders: true,
+  async listCustomers(params: {
+    tenantId: string;
+    search?: string;
+    town?: string;
+    page?: number;
+    pageSize?: number;
+  }) {
+    const page = params.page ?? 1;
+    const pageSize = params.pageSize ?? 10;
+
+    const skip = (page - 1) * pageSize;
+    const take = pageSize;
+
+    const where = {
+      tenantId: params.tenantId,
+      town: params.town || undefined,
+      OR: params.search
+        ? [
+            { fullName: { contains: params.search, mode: 'insensitive' as const } },
+            { phoneNumber: { contains: params.search, mode: 'insensitive' as const } },
+            {
+              alternatePhone: {
+                contains: params.search,
+                mode: 'insensitive' as const,
+              },
+            },
+            { town: { contains: params.search, mode: 'insensitive' as const } },
+          ]
+        : undefined,
+    };
+
+    const [items, totalItems] = await this.prisma.$transaction([
+      this.prisma.customer.findMany({
+        where,
+        include: {
+          _count: {
+            select: {
+              customerBlocks: true,
+              orders: true,
+            },
           },
         },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.customer.count({ where }),
+    ]);
+
+    const totalPages = Math.ceil(totalItems / pageSize);
+
+    return {
+      items,
+      pagination: {
+        page,
+        pageSize,
+        totalItems,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
       },
-      orderBy: { createdAt: 'desc' },
-    });
+    };
   }
 
   async getCustomerById(params: { id: string; tenantId: string }) {
     const customer = await this.prisma.customer.findFirst({
-      where: { id: params.id, tenantId: params.tenantId },
+      where: {
+        id: params.id,
+        tenantId: params.tenantId,
+      },
       include: {
-        blocks: {
+        customerBlocks: {
           include: {
-            category: true,
+            block: {
+              include: {
+                category: true,
+                _count: {
+                  select: {
+                    orderItems: true,
+                  },
+                },
+              },
+            },
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: [{ isDefault: 'desc' }, { assignedAt: 'asc' }],
         },
         orders: {
           include: {
             items: {
               include: {
                 category: true,
-                block: true,
+                block: {
+                  include: {
+                    category: true,
+                  },
+                },
               },
             },
           },
@@ -173,7 +257,7 @@ export class CustomersService {
         },
         _count: {
           select: {
-            blocks: true,
+            customerBlocks: true,
             orders: true,
           },
         },
@@ -186,4 +270,45 @@ export class CustomersService {
 
     return customer;
   }
+
+  async findByPhoneNumber(params: {
+  tenantId: string;
+  phoneNumber: string;
+}) {
+  const normalizedPhone = params.phoneNumber.trim();
+
+  const customer = await this.prisma.customer.findFirst({
+    where: {
+      tenantId: params.tenantId,
+      OR: [
+        { phoneNumber: normalizedPhone },
+        { alternatePhone: normalizedPhone },
+      ],
+    },
+    include: {
+      customerBlocks: {
+        include: {
+          block: {
+            include: {
+              category: true,
+            },
+          },
+        },
+        orderBy: [{ isDefault: 'desc' }, { assignedAt: 'asc' }],
+      },
+      _count: {
+        select: {
+          customerBlocks: true,
+          orders: true,
+        },
+      },
+    },
+  });
+
+  if (!customer) {
+    return null;
+  }
+
+  return customer;
+}
 }
