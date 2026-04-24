@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { AuditAction, Prisma } from '@prisma/client';
-import { AuditService } from '../audit/audit.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { AuditAction, Prisma } from "@prisma/client";
+import { AuditService } from "../audit/audit.service";
+import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
 export class OrdersService {
@@ -38,8 +38,10 @@ export class OrdersService {
         customerId: params.customerId,
         orderNumber: params.orderNumber,
         orderDate: params.orderDate ? new Date(params.orderDate) : new Date(),
-        promisedDate: params.promisedDate ? new Date(params.promisedDate) : undefined,
-        status: params.status ?? 'PENDING',
+        promisedDate: params.promisedDate
+          ? new Date(params.promisedDate)
+          : undefined,
+        status: params.status ?? "PENDING",
         notes: params.notes,
         totalAmount: params.totalAmount,
         advanceAmount: params.advanceAmount,
@@ -64,7 +66,7 @@ export class OrdersService {
       tenantId: params.tenantId,
       actorUserId: params.actorUserId,
       action: AuditAction.CREATE,
-      entityType: 'order',
+      entityType: "order",
       entityId: order.id,
       metadata: {
         orderNumber: params.orderNumber,
@@ -105,7 +107,7 @@ export class OrdersService {
     });
 
     if (!existing) {
-      throw new NotFoundException('Order not found');
+      throw new NotFoundException("Order not found");
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -115,7 +117,11 @@ export class OrdersService {
           customerId: params.customerId,
           orderNumber: params.orderNumber,
           orderDate: params.orderDate ? new Date(params.orderDate) : undefined,
-          promisedDate: params.promisedDate ? new Date(params.promisedDate) : params.promisedDate === null ? null : undefined,
+          promisedDate: params.promisedDate
+            ? new Date(params.promisedDate)
+            : params.promisedDate === null
+              ? null
+              : undefined,
           status: params.status,
           notes: params.notes,
           totalAmount: params.totalAmount,
@@ -148,7 +154,7 @@ export class OrdersService {
       tenantId: params.tenantId,
       actorUserId: params.actorUserId,
       action: AuditAction.UPDATE,
-      entityType: 'order',
+      entityType: "order",
       entityId: params.id,
       metadata: { orderNumber: params.orderNumber ?? existing.orderNumber },
     });
@@ -156,14 +162,18 @@ export class OrdersService {
     return this.getOrderById({ id: params.id, tenantId: params.tenantId });
   }
 
-  async deleteOrder(params: { id: string; tenantId: string; actorUserId: string }) {
+  async deleteOrder(params: {
+    id: string;
+    tenantId: string;
+    actorUserId: string;
+  }) {
     const existing = await this.prisma.order.findFirst({
       where: { id: params.id, tenantId: params.tenantId },
       include: { _count: { select: { items: true } } },
     });
 
     if (!existing) {
-      throw new NotFoundException('Order not found');
+      throw new NotFoundException("Order not found");
     }
 
     await this.prisma.order.delete({ where: { id: params.id } });
@@ -172,7 +182,7 @@ export class OrdersService {
       tenantId: params.tenantId,
       actorUserId: params.actorUserId,
       action: AuditAction.DELETE,
-      entityType: 'order',
+      entityType: "order",
       entityId: params.id,
       metadata: {
         orderNumber: existing.orderNumber,
@@ -188,18 +198,49 @@ export class OrdersService {
     orderDate?: string;
     promisedDate?: string;
     customerId?: string;
+    page?: number;
+    pageSize?: number;
   }) {
+    const page = params.page ?? 1;
+    const pageSize = params.pageSize ?? 10;
+    const skip = (page - 1) * pageSize;
+
     const where: Prisma.OrderWhereInput = {
       tenantId: params.tenantId,
-      status: params.status,
-      customerId: params.customerId,
     };
+
+    if (params.status) {
+      where.status = params.status as any;
+    }
+
+    if (params.customerId) {
+      where.customerId = params.customerId;
+    }
 
     if (params.search) {
       where.OR = [
-        { orderNumber: { contains: params.search, mode: 'insensitive' } },
-        { customer: { fullName: { contains: params.search, mode: 'insensitive' } } },
-        { customer: { phoneNumber: { contains: params.search, mode: 'insensitive' } } },
+        {
+          orderNumber: {
+            contains: params.search,
+            mode: "insensitive",
+          },
+        },
+        {
+          customer: {
+            fullName: {
+              contains: params.search,
+              mode: "insensitive",
+            },
+          },
+        },
+        {
+          customer: {
+            phoneNumber: {
+              contains: params.search,
+              mode: "insensitive",
+            },
+          },
+        },
       ];
     }
 
@@ -207,30 +248,61 @@ export class OrdersService {
       const start = new Date(params.orderDate);
       const end = new Date(params.orderDate);
       end.setDate(end.getDate() + 1);
-      where.orderDate = { gte: start, lt: end };
+
+      where.orderDate = {
+        gte: start,
+        lt: end,
+      };
     }
 
     if (params.promisedDate) {
       const start = new Date(params.promisedDate);
       const end = new Date(params.promisedDate);
       end.setDate(end.getDate() + 1);
-      where.promisedDate = { gte: start, lt: end };
+
+      where.promisedDate = {
+        gte: start,
+        lt: end,
+      };
     }
 
-    return this.prisma.order.findMany({
-      where,
-      include: {
-        customer: true,
-        items: {
-          include: {
-            category: true,
-            block: true,
+    const [items, totalItems] = await Promise.all([
+      this.prisma.order.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: [{ orderDate: "desc" }, { createdAt: "desc" }],
+        include: {
+          customer: true,
+          items: {
+            include: {
+              category: true,
+              block: true,
+            },
+          },
+          _count: {
+            select: {
+              items: true,
+            },
           },
         },
-        _count: { select: { items: true } },
+      }),
+      this.prisma.order.count({ where }),
+    ]);
+
+    const totalPages = Math.ceil(totalItems / pageSize);
+
+    return {
+      items,
+      pagination: {
+        page,
+        pageSize,
+        totalItems,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
       },
-      orderBy: [{ orderDate: 'desc' }, { createdAt: 'desc' }],
-    });
+    };
   }
 
   async getOrderById(params: { id: string; tenantId: string }) {
@@ -248,13 +320,13 @@ export class OrdersService {
               },
             },
           },
-          orderBy: { createdAt: 'asc' },
+          orderBy: { createdAt: "asc" },
         },
       },
     });
 
     if (!order) {
-      throw new NotFoundException('Order not found');
+      throw new NotFoundException("Order not found");
     }
 
     return order;
