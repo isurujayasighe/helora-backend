@@ -37,41 +37,95 @@ enum AuditAction {
   REVOKE
 }
 
+enum OrderSource {
+  DREZAURA
+  PHYSICAL_SHOP
+}
+
+enum PaymentMethod {
+  CASH
+  ONLINE_TRANSFER
+  BANK_TRANSFER
+}
+
+enum PaymentCategory {
+  FULL
+  ADVANCE
+  BALANCE
+}
+
+enum WhatsappTemplateCategory {
+  UTILITY
+  MARKETING
+  AUTHENTICATION
+}
+
+enum WhatsappTemplateStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  DISABLED
+}
+
+enum WhatsappMessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum WhatsappMessageType {
+  TEXT
+  TEMPLATE
+  IMAGE
+  DOCUMENT
+  BUTTON
+  INTERACTIVE
+}
+
+enum WhatsappMessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  RECEIVED
+}
+
 model Tenant {
-  id          String       @id @default(cuid())
-  name        String
-  slug        String       @unique
-  isActive    Boolean      @default(true)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   memberships Membership[]
   customers   Customer[]
   categories  Category[]
   blocks      Block[]
   orders      Order[]
+  payments    Payment[]
   auditLogs   AuditLog[]
 }
 
 model User {
-  id               String        @id @default(cuid())
-  email            String        @unique
-  passwordHash     String
-  firstName        String
-  lastName         String
-  status           UserStatus    @default(ACTIVE)
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   memberships      Membership[]
   sessions         Session[]
-  createdBlocks    Block[]       @relation("CreatedBlocks")
-  updatedBlocks    Block[]       @relation("UpdatedBlocks")
-  createdCustomers Customer[]    @relation("CreatedCustomers")
-  updatedCustomers Customer[]    @relation("UpdatedCustomers")
-  createdOrders    Order[]       @relation("CreatedOrders")
-  updatedOrders    Order[]       @relation("UpdatedOrders")
-  auditLogs        AuditLog[]    @relation("ActorAuditLogs")
+  createdBlocks    Block[]      @relation("CreatedBlocks")
+  updatedBlocks    Block[]      @relation("UpdatedBlocks")
+  createdCustomers Customer[]   @relation("CreatedCustomers")
+  updatedCustomers Customer[]   @relation("UpdatedCustomers")
+  createdOrders    Order[]      @relation("CreatedOrders")
+  updatedOrders    Order[]      @relation("UpdatedOrders")
+  auditLogs        AuditLog[]   @relation("ActorAuditLogs")
 }
 
 model Membership {
@@ -91,26 +145,26 @@ model Membership {
 }
 
 model Role {
-  id          String           @id @default(cuid())
+  id          String   @id @default(cuid())
   name        String
-  code        String           @unique
+  code        String   @unique
   description String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   memberships Membership[]
   permissions RolePermission[]
 }
 
 model Permission {
-  id          String            @id @default(cuid())
+  id          String           @id @default(cuid())
   resource    String
   action      PermissionAction
   description String?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
-  roles       RolePermission[]
+  roles RolePermission[]
 
   @@unique([resource, action])
 }
@@ -156,12 +210,13 @@ model Customer {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  createdBy      User           @relation("CreatedCustomers", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy      User           @relation("UpdatedCustomers", fields: [updatedById], references: [id], onDelete: Restrict)
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy User   @relation("CreatedCustomers", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy User   @relation("UpdatedCustomers", fields: [updatedById], references: [id], onDelete: Restrict)
 
   customerBlocks CustomerBlock[]
   orders         Order[]
+  payments       Payment[]
 }
 
 model Category {
@@ -199,27 +254,27 @@ model Block {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  category       Category  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  previousBlock  Block?    @relation("BlockVersions", fields: [previousBlockId], references: [id], onDelete: SetNull)
-  nextVersions   Block[]   @relation("BlockVersions")
-  createdBy      User      @relation("CreatedBlocks", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy      User      @relation("UpdatedBlocks", fields: [updatedById], references: [id], onDelete: Restrict)
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category      Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  previousBlock Block?   @relation("BlockVersions", fields: [previousBlockId], references: [id], onDelete: SetNull)
+  nextVersions  Block[]  @relation("BlockVersions")
+  createdBy     User     @relation("CreatedBlocks", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy     User     @relation("UpdatedBlocks", fields: [updatedById], references: [id], onDelete: Restrict)
 
   customerBlocks CustomerBlock[]
   orderItems     OrderItem[]
 
+  @@unique([tenantId, blockNumber, categoryId])
   @@index([tenantId, categoryId])
   @@index([tenantId, readyMadeSize])
-  @@unique([tenantId, blockNumber, categoryId])
 }
 
 model CustomerBlock {
-  customerId    String
-  blockId       String
-  isDefault     Boolean  @default(false)
-  assignedAt    DateTime @default(now())
-  assignedById  String?
+  customerId   String
+  blockId      String
+  isDefault    Boolean  @default(false)
+  assignedAt   DateTime @default(now())
+  assignedById String?
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   block    Block    @relation(fields: [blockId], references: [id], onDelete: Cascade)
@@ -227,11 +282,6 @@ model CustomerBlock {
   @@id([customerId, blockId])
   @@index([blockId])
   @@index([customerId])
-}
-
-enum OrderSource {
-  DREZAURA
-  PHYSICAL_SHOP
 }
 
 model Order {
@@ -252,12 +302,13 @@ model Order {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
-  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  customer   Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  createdBy  User        @relation("CreatedOrders", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy  User        @relation("UpdatedOrders", fields: [updatedById], references: [id], onDelete: Restrict)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer  Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdBy User     @relation("CreatedOrders", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy User     @relation("UpdatedOrders", fields: [updatedById], references: [id], onDelete: Restrict)
 
-  items      OrderItem[]
+  items    OrderItem[]
+  payments Payment[]
 
   @@unique([tenantId, orderNumber])
   @@index([tenantId, orderDate])
@@ -267,25 +318,58 @@ model Order {
 }
 
 model OrderItem {
-  id              String    @id @default(cuid())
+  id              String   @id @default(cuid())
   orderId         String
   categoryId      String
   blockId         String?
   itemDescription String?
-  quantity        Int       @default(1)
-  unitPrice       Decimal?  @db.Decimal(12, 2)
-  lineTotal       Decimal?  @db.Decimal(12, 2)
+  quantity        Int      @default(1)
+  unitPrice       Decimal? @db.Decimal(12, 2)
+  lineTotal       Decimal? @db.Decimal(12, 2)
   notes           String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  category        Category  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  block           Block?    @relation(fields: [blockId], references: [id], onDelete: SetNull)
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  block    Block?   @relation(fields: [blockId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
   @@index([categoryId])
   @@index([blockId])
+}
+
+model Payment {
+  id         String @id @default(cuid())
+  tenantId   String
+  orderId    String
+  customerId String
+
+  paymentDate DateTime @default(now())
+  paidAmount  Decimal  @db.Decimal(12, 2)
+
+  paymentMethod   PaymentMethod
+  paymentCategory PaymentCategory
+
+  bankName        String?
+  referenceNumber String?
+  notes           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  whatsappMessages WhatsappMessage[]
+
+  @@index([tenantId])
+  @@index([orderId])
+  @@index([customerId])
+  @@index([paymentDate])
+  @@index([paymentMethod])
+  @@index([paymentCategory])
 }
 
 model AuditLog {
@@ -302,4 +386,91 @@ model AuditLog {
 
   tenant    Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
   actorUser User?   @relation("ActorAuditLogs", fields: [actorUserId], references: [id], onDelete: SetNull)
+}
+
+model WhatsappAccount {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  businessName       String?
+  phoneNumber        String
+  phoneNumberId      String
+  businessAccountId  String?
+  accessToken        String
+  webhookVerifyToken String?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  messages  WhatsappMessage[]
+  templates WhatsappTemplate[]
+
+  @@index([tenantId])
+  @@index([phoneNumberId])
+}
+
+model WhatsappTemplate {
+  id                String @id @default(cuid())
+  tenantId          String
+  whatsappAccountId String
+
+  name         String
+  category     WhatsappTemplateCategory
+  languageCode String                   @default("en")
+  status       WhatsappTemplateStatus   @default(PENDING)
+
+  description String?
+  bodyPreview String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  whatsappAccount WhatsappAccount @relation(fields: [whatsappAccountId], references: [id])
+
+  @@unique([tenantId, name, languageCode])
+  @@index([tenantId])
+  @@index([whatsappAccountId])
+}
+
+model WhatsappMessage {
+  id                String @id @default(cuid())
+  tenantId          String
+  whatsappAccountId String
+
+  customerId String?
+  orderId    String?
+  paymentId  String?
+
+  direction   WhatsappMessageDirection
+  messageType WhatsappMessageType
+  status      WhatsappMessageStatus    @default(PENDING)
+
+  whatsappMessageId String?
+  fromPhone         String?
+  toPhone           String
+
+  templateName String?
+  languageCode String?
+
+  body    String?
+  payload Json?
+
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  readAt      DateTime?
+  failedAt    DateTime?
+
+  failureReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  whatsappAccount WhatsappAccount @relation(fields: [whatsappAccountId], references: [id])
+  payment         Payment?        @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([orderId])
+  @@index([paymentId])
+  @@index([whatsappMessageId])
+  @@index([status])
 }
