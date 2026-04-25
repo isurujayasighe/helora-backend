@@ -311,4 +311,58 @@ export class CustomersService {
 
   return customer;
 }
+
+async lookupCustomers(params: {
+  tenantId: string;
+  search?: string;
+  limit?: number;
+}) {
+  const limit = params.limit ?? 10;
+  const search = params.search?.trim();
+
+  return this.prisma.customer.findMany({
+    where: {
+      tenantId: params.tenantId,
+      OR: search
+        ? [
+            {
+              fullName: {
+                contains: search,
+                mode: 'insensitive',
+              },
+            },
+            {
+              phoneNumber: {
+                contains: search,
+                mode: 'insensitive',
+              },
+            },
+            {
+              alternatePhone: {
+                contains: search,
+                mode: 'insensitive',
+              },
+            },
+            {
+              town: {
+                contains: search,
+                mode: 'insensitive',
+              },
+            },
+          ]
+        : undefined,
+    },
+    select: {
+      id: true,
+      fullName: true,
+      phoneNumber: true,
+      alternatePhone: true,
+      town: true,
+    },
+    orderBy: {
+      fullName: 'asc',
+    },
+    take: limit,
+  });
+}
 }

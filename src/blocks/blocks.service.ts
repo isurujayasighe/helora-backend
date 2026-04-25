@@ -328,53 +328,64 @@ export class BlocksService {
   }
 
   async listBlocks(params: {
-    tenantId: string;
-    search?: string;
-    categoryId?: string;
-    customerId?: string;
-    status?: string;
-  }) {
-    return this.prisma.block.findMany({
-      where: {
-        tenantId: params.tenantId,
-        categoryId: params.categoryId || undefined,
-        status: params.status || undefined,
-        customerBlocks: params.customerId
-          ? {
+  tenantId: string;
+  search?: string;
+  categoryId?: string;
+  customerId?: string;
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}) {
+  const page = params.page ?? 1;
+  const pageSize = params.pageSize ?? 10;
+
+  const skip = (page - 1) * pageSize;
+  const take = pageSize;
+
+  const where = {
+    tenantId: params.tenantId,
+    categoryId: params.categoryId || undefined,
+    status: params.status || undefined,
+    customerBlocks: params.customerId
+      ? {
+          some: {
+            customerId: params.customerId,
+          },
+        }
+      : undefined,
+    OR: params.search
+      ? [
+          { blockNumber: { contains: params.search, mode: 'insensitive' as const } },
+          { description: { contains: params.search, mode: 'insensitive' as const } },
+          { readyMadeSize: { contains: params.search, mode: 'insensitive' as const } },
+          { sizeLabel: { contains: params.search, mode: 'insensitive' as const } },
+          { remarks: { contains: params.search, mode: 'insensitive' as const } },
+          { category: { name: { contains: params.search, mode: 'insensitive' as const } } },
+          {
+            customerBlocks: {
               some: {
-                customerId: params.customerId,
-              },
-            }
-          : undefined,
-        OR: params.search
-          ? [
-              { blockNumber: { contains: params.search, mode: 'insensitive' } },
-              { description: { contains: params.search, mode: 'insensitive' } },
-              { readyMadeSize: { contains: params.search, mode: 'insensitive' } },
-              { sizeLabel: { contains: params.search, mode: 'insensitive' } },
-              { remarks: { contains: params.search, mode: 'insensitive' } },
-              { category: { name: { contains: params.search, mode: 'insensitive' } } },
-              {
-                customerBlocks: {
-                  some: {
-                    customer: {
-                      fullName: { contains: params.search, mode: 'insensitive' },
-                    },
-                  },
+                customer: {
+                  fullName: { contains: params.search, mode: 'insensitive' as const },
                 },
               },
-              {
-                customerBlocks: {
-                  some: {
-                    customer: {
-                      phoneNumber: { contains: params.search, mode: 'insensitive' },
-                    },
-                  },
+            },
+          },
+          {
+            customerBlocks: {
+              some: {
+                customer: {
+                  phoneNumber: { contains: params.search, mode: 'insensitive' as const },
                 },
               },
-            ]
-          : undefined,
-      },
+            },
+          },
+        ]
+      : undefined,
+  };
+
+  const [items, totalItems] = await this.prisma.$transaction([
+    this.prisma.block.findMany({
+      where,
       include: {
         category: true,
         customerBlocks: {
@@ -383,11 +394,33 @@ export class BlocksService {
           },
           orderBy: [{ isDefault: 'desc' }, { assignedAt: 'asc' }],
         },
-        _count: { select: { orderItems: true } },
+        _count: {
+          select: {
+            orderItems: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
-    });
-  }
+      skip,
+      take,
+    }),
+    this.prisma.block.count({ where }),
+  ]);
+
+  const totalPages = Math.ceil(totalItems / pageSize);
+
+  return {
+    items,
+    pagination: {
+      page,
+      pageSize,
+      totalItems,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1,
+    },
+  };
+}
 
   async getBlockById(params: { id: string; tenantId: string }) {
     const block = await this.prisma.block.findFirst({

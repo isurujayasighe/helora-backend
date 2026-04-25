@@ -9,61 +9,66 @@ import {
   Query,
   UseGuards,
   Version,
-} from '@nestjs/common';
-import { CommandBus, QueryBus } from '@nestjs/cqrs';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { PermissionsGuard } from '../common/guards/permissions.guard';
-import { Permissions } from '../common/decorators/permissions.decorator';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { CurrentUserContext } from '../common/types/current-user-context.type';
+} from "@nestjs/common";
+import { CommandBus, QueryBus } from "@nestjs/cqrs";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 
-import { CreateCustomerDto } from './dto/create-customer.dto';
-import { UpdateCustomerDto } from './dto/update-customer.dto';
-import { ListCustomersDto } from './dto/list-customers.dto';
-import { FindCustomerByPhoneDto } from './dto/find-customer-by-phone-number-dto';
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { PermissionsGuard } from "../common/guards/permissions.guard";
+import { Permissions } from "../common/decorators/permissions.decorator";
+import { CurrentUser } from "../common/decorators/current-user.decorator";
+import { CurrentUserContext } from "../common/types/current-user-context.type";
 
-import { CreateCustomerCommand } from './commands/impl/create-customer.command';
-import { UpdateCustomerCommand } from './commands/impl/update-customer.command';
-import { DeleteCustomerCommand } from './commands/impl/delete-customer.command';
+import { CreateCustomerDto } from "./dto/create-customer.dto";
+import { UpdateCustomerDto } from "./dto/update-customer.dto";
+import { ListCustomersDto } from "./dto/list-customers.dto";
+import { FindCustomerByPhoneDto } from "./dto/find-customer-by-phone-number-dto";
+import { CustomerLookupDto } from "./dto/customer-lookup-dto";
 
-import { ListCustomersQuery } from './queries/impl/list-customers.query';
-import { GetCustomerByIdQuery } from './queries/impl/get-customer-by-id.query';
-import { FindCustomerByPhoneQuery } from './queries/impl/find-customer-by-phone-query';
+import { CreateCustomerCommand } from "./commands/impl/create-customer.command";
+import { UpdateCustomerCommand } from "./commands/impl/update-customer.command";
+import { DeleteCustomerCommand } from "./commands/impl/delete-customer.command";
 
-@ApiTags('Customers')
+import { ListCustomersQuery } from "./queries/impl/list-customers.query";
+import { GetCustomerByIdQuery } from "./queries/impl/get-customer-by-id.query";
+import { FindCustomerByPhoneQuery } from "./queries/impl/find-customer-by-phone-query";
+import { CustomerLookupQuery } from "./queries/impl/customer-lookup-query";
+
+@ApiTags("Customers")
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, PermissionsGuard)
-@Controller('customers')
+@Controller("customers")
 export class CustomersController {
   constructor(
     private readonly commandBus: CommandBus,
     private readonly queryBus: QueryBus,
   ) {}
 
-  @Version('1')
-  @Permissions('customers:create')
+  @Version("1")
+  @Permissions("customers:create")
   @Post()
   async create(
     @CurrentUser() currentUser: CurrentUserContext,
     @Body() body: CreateCustomerDto,
   ) {
-    return this.commandBus.execute(new CreateCustomerCommand(currentUser, body));
+    return this.commandBus.execute(
+      new CreateCustomerCommand(currentUser, body),
+    );
   }
 
-  @Version('1')
-  @Permissions('customers:read')
-  @Get()
-  async list(
+  @Version("1")
+  @Permissions("customers:read")
+  @Get("lookup")
+  async lookupCustomers(
     @CurrentUser() currentUser: CurrentUserContext,
-    @Query() query: ListCustomersDto,
+    @Query() filters: CustomerLookupDto,
   ) {
-    return this.queryBus.execute(new ListCustomersQuery(currentUser, query));
+    return this.queryBus.execute(new CustomerLookupQuery(currentUser, filters));
   }
 
-  @Version('1')
-  @Permissions('customers:read')
-  @Get('by-phone')
+  @Version("1")
+  @Permissions("customers:read")
+  @Get("by-phone")
   async findByPhone(
     @CurrentUser() currentUser: CurrentUserContext,
     @Query() dto: FindCustomerByPhoneDto,
@@ -73,22 +78,32 @@ export class CustomersController {
     );
   }
 
-  @Version('1')
-  @Permissions('customers:read')
-  @Get(':id')
+  @Version("1")
+  @Permissions("customers:read")
+  @Get()
+  async list(
+    @CurrentUser() currentUser: CurrentUserContext,
+    @Query() query: ListCustomersDto,
+  ) {
+    return this.queryBus.execute(new ListCustomersQuery(currentUser, query));
+  }
+
+  @Version("1")
+  @Permissions("customers:read")
+  @Get(":id")
   async getById(
     @CurrentUser() currentUser: CurrentUserContext,
-    @Param('id') id: string,
+    @Param("id") id: string,
   ) {
     return this.queryBus.execute(new GetCustomerByIdQuery(currentUser, id));
   }
 
-  @Version('1')
-  @Permissions('customers:update')
-  @Patch(':id')
+  @Version("1")
+  @Permissions("customers:update")
+  @Patch(":id")
   async update(
     @CurrentUser() currentUser: CurrentUserContext,
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() body: UpdateCustomerDto,
   ) {
     return this.commandBus.execute(
@@ -96,12 +111,12 @@ export class CustomersController {
     );
   }
 
-  @Version('1')
-  @Permissions('customers:delete')
-  @Delete(':id')
+  @Version("1")
+  @Permissions("customers:delete")
+  @Delete(":id")
   async remove(
     @CurrentUser() currentUser: CurrentUserContext,
-    @Param('id') id: string,
+    @Param("id") id: string,
   ) {
     return this.commandBus.execute(new DeleteCustomerCommand(currentUser, id));
   }
