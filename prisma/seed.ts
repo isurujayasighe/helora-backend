@@ -12,6 +12,12 @@ import {
   PaymentStatus,
   OrderPaymentMode,
   OrderItemStatus,
+  AttendanceDeviceType,
+  AttendanceSyncMode,
+  AttendancePunchType,
+  AttendanceVerifyMode,
+  AttendanceRecordStatus,
+  AttendanceRecordSource,
 } from '@prisma/client';
 import * as argon2 from 'argon2';
 
@@ -74,6 +80,21 @@ async function main() {
     ['payments', PermissionAction.READ],
     ['payments', PermissionAction.UPDATE],
     ['payments', PermissionAction.DELETE],
+
+    ['employees', PermissionAction.CREATE],
+    ['employees', PermissionAction.READ],
+    ['employees', PermissionAction.UPDATE],
+    ['employees', PermissionAction.DELETE],
+
+    ['attendance', PermissionAction.CREATE],
+    ['attendance', PermissionAction.READ],
+    ['attendance', PermissionAction.UPDATE],
+    ['attendance', PermissionAction.DELETE],
+
+    ['attendance-devices', PermissionAction.CREATE],
+    ['attendance-devices', PermissionAction.READ],
+    ['attendance-devices', PermissionAction.UPDATE],
+    ['attendance-devices', PermissionAction.DELETE],
 
     ['audit', PermissionAction.READ],
   ] as const;
@@ -156,6 +177,9 @@ async function main() {
         'orders',
         'group-orders',
         'payments',
+        'employees',
+        'attendance',
+        'attendance-devices',
         'audit',
       ].includes(item.resource),
   );
@@ -764,6 +788,289 @@ async function main() {
     },
   });
 
+  const employee1 = await prisma.employee.upsert({
+    where: {
+      tenantId_employeeNumber: {
+        tenantId: tenant.id,
+        employeeNumber: 'EMP-0001',
+      },
+    },
+    update: {
+      fullName: 'Kumari Perera',
+      phoneNumber: '0711111111',
+      nicNumber: '901234567V',
+      designation: 'Senior Tailor',
+      department: 'Tailoring',
+      joinedDate: new Date('2025-01-10T00:00:00.000Z'),
+      biometricUserId: '101',
+      dailyWage: 2500,
+      hourlyRate: 350,
+      isActive: true,
+      notes: 'Seed employee for attendance testing.',
+      updatedById: admin.id,
+    },
+    create: {
+      tenantId: tenant.id,
+      employeeNumber: 'EMP-0001',
+      fullName: 'Kumari Perera',
+      phoneNumber: '0711111111',
+      nicNumber: '901234567V',
+      designation: 'Senior Tailor',
+      department: 'Tailoring',
+      joinedDate: new Date('2025-01-10T00:00:00.000Z'),
+      biometricUserId: '101',
+      dailyWage: 2500,
+      hourlyRate: 350,
+      isActive: true,
+      notes: 'Seed employee for attendance testing.',
+      createdById: admin.id,
+      updatedById: admin.id,
+    },
+  });
+
+  const employee2 = await prisma.employee.upsert({
+    where: {
+      tenantId_employeeNumber: {
+        tenantId: tenant.id,
+        employeeNumber: 'EMP-0002',
+      },
+    },
+    update: {
+      fullName: 'Nimali Fernando',
+      phoneNumber: '0722222222',
+      nicNumber: '925678901V',
+      designation: 'Cutting Assistant',
+      department: 'Cutting',
+      joinedDate: new Date('2025-03-15T00:00:00.000Z'),
+      biometricUserId: '102',
+      dailyWage: 2200,
+      hourlyRate: 300,
+      isActive: true,
+      notes: 'Seed cutting department employee.',
+      updatedById: admin.id,
+    },
+    create: {
+      tenantId: tenant.id,
+      employeeNumber: 'EMP-0002',
+      fullName: 'Nimali Fernando',
+      phoneNumber: '0722222222',
+      nicNumber: '925678901V',
+      designation: 'Cutting Assistant',
+      department: 'Cutting',
+      joinedDate: new Date('2025-03-15T00:00:00.000Z'),
+      biometricUserId: '102',
+      dailyWage: 2200,
+      hourlyRate: 300,
+      isActive: true,
+      notes: 'Seed cutting department employee.',
+      createdById: admin.id,
+      updatedById: admin.id,
+    },
+  });
+
+  const attendanceDevice = await prisma.attendanceDevice.upsert({
+    where: {
+      tenantId_deviceCode: {
+        tenantId: tenant.id,
+        deviceCode: 'FP-HEAD-OFFICE-01',
+      },
+    },
+    update: {
+      deviceName: 'Main Shop Fingerprint Scanner',
+      deviceType: AttendanceDeviceType.FINGERPRINT,
+      syncMode: AttendanceSyncMode.MANUAL,
+      serialNumber: 'FP-DEMO-0001',
+      ipAddress: '192.168.1.120',
+      port: 4370,
+      location: 'Main Shop Entrance',
+      isActive: true,
+      lastSyncedAt: new Date(),
+      notes: 'Seed fingerprint device. Replace with real device details later.',
+    },
+    create: {
+      tenantId: tenant.id,
+      deviceName: 'Main Shop Fingerprint Scanner',
+      deviceCode: 'FP-HEAD-OFFICE-01',
+      deviceType: AttendanceDeviceType.FINGERPRINT,
+      syncMode: AttendanceSyncMode.MANUAL,
+      serialNumber: 'FP-DEMO-0001',
+      ipAddress: '192.168.1.120',
+      port: 4370,
+      location: 'Main Shop Entrance',
+      isActive: true,
+      lastSyncedAt: new Date(),
+      notes: 'Seed fingerprint device. Replace with real device details later.',
+    },
+  });
+
+  const attendanceDate = new Date('2026-04-26T00:00:00.000Z');
+
+  const employee1CheckIn = new Date('2026-04-26T03:35:00.000Z');
+  const employee1CheckOut = new Date('2026-04-26T12:05:00.000Z');
+
+  const employee2CheckIn = new Date('2026-04-26T03:20:00.000Z');
+  const employee2CheckOut = new Date('2026-04-26T11:45:00.000Z');
+
+  const attendanceLogSeeds = [
+    {
+      employee: employee1,
+      biometricUserId: employee1.biometricUserId!,
+      punchTime: employee1CheckIn,
+      punchType: AttendancePunchType.CHECK_IN,
+      event: 'check-in',
+    },
+    {
+      employee: employee1,
+      biometricUserId: employee1.biometricUserId!,
+      punchTime: employee1CheckOut,
+      punchType: AttendancePunchType.CHECK_OUT,
+      event: 'check-out',
+    },
+    {
+      employee: employee2,
+      biometricUserId: employee2.biometricUserId!,
+      punchTime: employee2CheckIn,
+      punchType: AttendancePunchType.CHECK_IN,
+      event: 'check-in',
+    },
+    {
+      employee: employee2,
+      biometricUserId: employee2.biometricUserId!,
+      punchTime: employee2CheckOut,
+      punchType: AttendancePunchType.CHECK_OUT,
+      event: 'check-out',
+    },
+  ];
+
+  for (const log of attendanceLogSeeds) {
+    await prisma.attendanceLog.upsert({
+      where: {
+        tenantId_biometricUserId_punchTime: {
+          tenantId: tenant.id,
+          biometricUserId: log.biometricUserId,
+          punchTime: log.punchTime,
+        },
+      },
+      update: {
+        employeeId: log.employee.id,
+        deviceId: attendanceDevice.id,
+        punchType: log.punchType,
+        verifyMode: AttendanceVerifyMode.FINGERPRINT,
+        isProcessed: true,
+        processedAt: new Date(),
+        rawPayload: {
+          source: 'seed',
+          deviceCode: attendanceDevice.deviceCode,
+          event: log.event,
+        },
+      },
+      create: {
+        tenantId: tenant.id,
+        employeeId: log.employee.id,
+        deviceId: attendanceDevice.id,
+        biometricUserId: log.biometricUserId,
+        punchTime: log.punchTime,
+        punchType: log.punchType,
+        verifyMode: AttendanceVerifyMode.FINGERPRINT,
+        isProcessed: true,
+        processedAt: new Date(),
+        rawPayload: {
+          source: 'seed',
+          deviceCode: attendanceDevice.deviceCode,
+          event: log.event,
+        },
+      },
+    });
+  }
+
+  await prisma.attendanceRecord.upsert({
+    where: {
+      tenantId_employeeId_attendanceDate: {
+        tenantId: tenant.id,
+        employeeId: employee1.id,
+        attendanceDate,
+      },
+    },
+    update: {
+      firstIn: employee1CheckIn,
+      lastOut: employee1CheckOut,
+      status: AttendanceRecordStatus.LATE,
+      source: AttendanceRecordSource.DEVICE,
+      totalMinutes: 510,
+      lateMinutes: 5,
+      overtimeMinutes: 30,
+      expectedInTime: '09:00',
+      expectedOutTime: '17:00',
+      notes: 'Seed attendance record generated from fingerprint logs.',
+      approvedById: admin.id,
+      approvedAt: new Date(),
+      updatedById: admin.id,
+    },
+    create: {
+      tenantId: tenant.id,
+      employeeId: employee1.id,
+      attendanceDate,
+      firstIn: employee1CheckIn,
+      lastOut: employee1CheckOut,
+      status: AttendanceRecordStatus.LATE,
+      source: AttendanceRecordSource.DEVICE,
+      totalMinutes: 510,
+      lateMinutes: 5,
+      overtimeMinutes: 30,
+      expectedInTime: '09:00',
+      expectedOutTime: '17:00',
+      notes: 'Seed attendance record generated from fingerprint logs.',
+      approvedById: admin.id,
+      approvedAt: new Date(),
+      createdById: admin.id,
+      updatedById: admin.id,
+    },
+  });
+
+  await prisma.attendanceRecord.upsert({
+    where: {
+      tenantId_employeeId_attendanceDate: {
+        tenantId: tenant.id,
+        employeeId: employee2.id,
+        attendanceDate,
+      },
+    },
+    update: {
+      firstIn: employee2CheckIn,
+      lastOut: employee2CheckOut,
+      status: AttendanceRecordStatus.PRESENT,
+      source: AttendanceRecordSource.DEVICE,
+      totalMinutes: 505,
+      lateMinutes: 0,
+      overtimeMinutes: 15,
+      expectedInTime: '09:00',
+      expectedOutTime: '17:00',
+      notes: 'Seed attendance record generated from fingerprint logs.',
+      approvedById: admin.id,
+      approvedAt: new Date(),
+      updatedById: admin.id,
+    },
+    create: {
+      tenantId: tenant.id,
+      employeeId: employee2.id,
+      attendanceDate,
+      firstIn: employee2CheckIn,
+      lastOut: employee2CheckOut,
+      status: AttendanceRecordStatus.PRESENT,
+      source: AttendanceRecordSource.DEVICE,
+      totalMinutes: 505,
+      lateMinutes: 0,
+      overtimeMinutes: 15,
+      expectedInTime: '09:00',
+      expectedOutTime: '17:00',
+      notes: 'Seed attendance record generated from fingerprint logs.',
+      approvedById: admin.id,
+      approvedAt: new Date(),
+      createdById: admin.id,
+      updatedById: admin.id,
+    },
+  });
+
   console.log('Seed completed successfully');
   console.log('Login email: admin@helora.local');
   console.log('Login password: Admin@12345');
@@ -773,6 +1080,9 @@ async function main() {
   console.log(`Measurement ID: ${measurement.id}`);
   console.log(`Group Order ID: ${groupOrder.id}`);
   console.log(`Order ID: ${order.id}`);
+  console.log(`Employee 1 ID: ${employee1.id}`);
+  console.log(`Employee 2 ID: ${employee2.id}`);
+  console.log(`Attendance Device ID: ${attendanceDevice.id}`);
 }
 
 main()

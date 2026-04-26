@@ -148,6 +148,56 @@ enum PaymentRecordStatus {
   REFUNDED
 }
 
+enum AttendanceDeviceType {
+  FINGERPRINT
+  FACE
+  CARD
+  MANUAL
+  OTHER
+}
+
+enum AttendanceSyncMode {
+  MANUAL
+  PUSH
+  PULL
+  CLOUD
+  CSV_IMPORT
+}
+
+enum AttendancePunchType {
+  CHECK_IN
+  CHECK_OUT
+  BREAK_IN
+  BREAK_OUT
+  UNKNOWN
+}
+
+enum AttendanceVerifyMode {
+  FINGERPRINT
+  FACE
+  CARD
+  PIN
+  MANUAL
+  UNKNOWN
+}
+
+enum AttendanceRecordStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  LATE
+  LEAVE
+  HOLIDAY
+  OFF_DAY
+}
+
+enum AttendanceRecordSource {
+  DEVICE
+  MANUAL
+  IMPORT
+  SYSTEM
+}
+
 enum WhatsappTemplateCategory {
   UTILITY
   MARKETING
@@ -208,6 +258,10 @@ model Tenant {
   orders            Order[]
   groupOrders       GroupOrder[]
   payments          Payment[]
+  employees         Employee[]
+  attendanceDevices AttendanceDevice[]
+  attendanceLogs    AttendanceLog[]
+  attendanceRecords AttendanceRecord[]
   auditLogs         AuditLog[]
   whatsappAccounts  WhatsappAccount[]
   whatsappMessages  WhatsappMessage[]
@@ -248,6 +302,13 @@ model User {
 
   createdPayments Payment[] @relation("PaymentCreatedBy")
   updatedPayments Payment[] @relation("PaymentUpdatedBy")
+
+  createdEmployees Employee[] @relation("EmployeeCreatedBy")
+  updatedEmployees Employee[] @relation("EmployeeUpdatedBy")
+
+  approvedAttendanceRecords AttendanceRecord[] @relation("AttendanceRecordApprovedBy")
+  createdAttendanceRecords  AttendanceRecord[] @relation("AttendanceRecordCreatedBy")
+  updatedAttendanceRecords  AttendanceRecord[] @relation("AttendanceRecordUpdatedBy")
 
   auditLogs AuditLog[] @relation("ActorAuditLogs")
 }
@@ -807,6 +868,172 @@ model Payment {
 
 /**
  * ------------------------------------------------------
+ * EMPLOYEES / ATTENDANCE
+ * ------------------------------------------------------
+ */
+
+model Employee {
+  id       String @id @default(cuid())
+  tenantId String
+
+  employeeNumber String
+  fullName       String
+  phoneNumber    String?
+  nicNumber      String?
+  designation    String?
+  department     String?
+  joinedDate     DateTime?
+  resignedDate   DateTime?
+
+  biometricUserId String?
+
+  basicSalary Decimal? @db.Decimal(12, 2)
+  dailyWage   Decimal? @db.Decimal(12, 2)
+  hourlyRate  Decimal? @db.Decimal(12, 2)
+
+  isActive Boolean @default(true)
+
+  notes String?
+
+  createdById String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdBy User? @relation("EmployeeCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("EmployeeUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  attendanceLogs    AttendanceLog[]
+  attendanceRecords AttendanceRecord[]
+
+  @@unique([tenantId, employeeNumber])
+  @@index([tenantId])
+  @@index([employeeNumber])
+  @@index([fullName])
+  @@index([biometricUserId])
+  @@index([department])
+  @@index([isActive])
+}
+
+model AttendanceDevice {
+  id       String @id @default(cuid())
+  tenantId String
+
+  deviceName String
+  deviceCode String
+
+  deviceType AttendanceDeviceType @default(FINGERPRINT)
+  syncMode   AttendanceSyncMode   @default(MANUAL)
+
+  serialNumber String?
+  ipAddress    String?
+  port         Int?
+  location     String?
+
+  isActive Boolean @default(true)
+
+  lastSyncedAt DateTime?
+  notes        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  attendanceLogs AttendanceLog[]
+
+  @@unique([tenantId, deviceCode])
+  @@index([tenantId])
+  @@index([deviceCode])
+  @@index([deviceType])
+  @@index([syncMode])
+  @@index([isActive])
+}
+
+model AttendanceLog {
+  id       String @id @default(cuid())
+  tenantId String
+
+  employeeId String?
+  deviceId   String?
+
+  biometricUserId String
+  punchTime       DateTime
+
+  punchType  AttendancePunchType  @default(UNKNOWN)
+  verifyMode AttendanceVerifyMode @default(UNKNOWN)
+
+  rawPayload Json?
+
+  isProcessed Boolean   @default(false)
+  processedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee Employee?         @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  device   AttendanceDevice? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, biometricUserId, punchTime])
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([deviceId])
+  @@index([biometricUserId])
+  @@index([punchTime])
+  @@index([punchType])
+  @@index([isProcessed])
+}
+
+model AttendanceRecord {
+  id       String @id @default(cuid())
+  tenantId String
+
+  employeeId String
+
+  attendanceDate DateTime
+
+  firstIn DateTime?
+  lastOut DateTime?
+
+  status AttendanceRecordStatus @default(PRESENT)
+  source AttendanceRecordSource @default(DEVICE)
+
+  totalMinutes    Int @default(0)
+  lateMinutes     Int @default(0)
+  overtimeMinutes Int @default(0)
+
+  expectedInTime  String?
+  expectedOutTime String?
+
+  notes String?
+
+  approvedById String?
+  approvedAt   DateTime?
+
+  createdById String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  approvedBy User? @relation("AttendanceRecordApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  createdBy  User? @relation("AttendanceRecordCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy  User? @relation("AttendanceRecordUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, employeeId, attendanceDate])
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([attendanceDate])
+  @@index([status])
+  @@index([source])
+}
+
+/**
+ * ------------------------------------------------------
  * AUDIT
  * ------------------------------------------------------
  */
@@ -872,8 +1099,8 @@ model WhatsappTemplate {
 
   name         String
   category     WhatsappTemplateCategory
-  languageCode String                   @default("en")
-  status       WhatsappTemplateStatus   @default(PENDING)
+  languageCode String                 @default("en")
+  status       WhatsappTemplateStatus @default(PENDING)
 
   description String?
   bodyPreview String?
