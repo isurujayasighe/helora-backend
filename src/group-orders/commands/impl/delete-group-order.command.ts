@@ -1,9 +1,8 @@
 import { CurrentUserContext } from '../../../common/types/current-user-context.type';
-import { CreateOrderDto } from '../../dto/create-order.dto';
 
-export class CreateOrderCommand {
+export class DeleteGroupOrderCommand {
   constructor(
     public readonly currentUser: CurrentUserContext,
-    public readonly payload: CreateOrderDto,
+    public readonly id: string,
   ) {}
 }

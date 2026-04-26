@@ -1,25 +1,26 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { BlockStatus } from '@prisma/client';
+import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
   IsBoolean,
+  IsEnum,
   IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
-  Min,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 
-export class CreateBlockCustomerAssignmentDto {
-  @ApiProperty({ example: 'customer_cuid_1' })
+export class CreateBlockCustomerDto {
+  @ApiProperty({ example: 'customer_cuid' })
   @IsString()
   @IsNotEmpty()
   customerId!: string;
 
-  @ApiPropertyOptional({ example: true, default: false })
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   isDefault?: boolean;
@@ -54,11 +55,10 @@ export class CreateBlockDto {
   @IsString()
   fitNotes?: string;
 
-  @ApiPropertyOptional({ example: 1, default: 1 })
+  @ApiPropertyOptional({ example: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(1)
   versionNo?: number;
 
   @ApiPropertyOptional({ example: 'previous_block_cuid' })
@@ -71,10 +71,13 @@ export class CreateBlockDto {
   @IsString()
   description?: string;
 
-  @ApiPropertyOptional({ example: 'ACTIVE' })
+  @ApiPropertyOptional({
+    example: BlockStatus.ACTIVE,
+    enum: BlockStatus,
+  })
   @IsOptional()
-  @IsString()
-  status?: string;
+  @IsEnum(BlockStatus)
+  status?: BlockStatus;
 
   @ApiPropertyOptional({ example: 'Default uniform block' })
   @IsOptional()
@@ -87,10 +90,10 @@ export class CreateBlockDto {
   @IsInt()
   legacyId?: number;
 
-  @ApiProperty({ type: [CreateBlockCustomerAssignmentDto] })
+  @ApiProperty({ type: [CreateBlockCustomerDto] })
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
-  @Type(() => CreateBlockCustomerAssignmentDto)
-  customers!: CreateBlockCustomerAssignmentDto[];
+  @Type(() => CreateBlockCustomerDto)
+  customers!: CreateBlockCustomerDto[];
 }

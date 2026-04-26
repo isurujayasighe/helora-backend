@@ -7,14 +7,9 @@ export class ListBlocksHandler implements IQueryHandler<ListBlocksQuery> {
   constructor(private readonly blocksService: BlocksService) {}
 
   async execute(query: ListBlocksQuery) {
-    const page = query.filters.page ?? 1;
-    const pageSize = query.filters.pageSize ?? 10;
-
     const result = await this.blocksService.listBlocks({
       tenantId: query.currentUser.tenantId,
       ...query.filters,
-      page,
-      pageSize,
     });
 
     return {

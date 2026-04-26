@@ -10,8 +10,6 @@ export class ListOrdersHandler implements IQueryHandler<ListOrdersQuery> {
     const result = await this.ordersService.listOrders({
       tenantId: query.currentUser.tenantId,
       ...query.filters,
-      page: query.page,
-      pageSize: query.pageSize,
     });
 
     return {

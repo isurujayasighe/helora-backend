@@ -1,8 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { BlockStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
-  IsEnum,
+  IsDateString,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -10,8 +10,12 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import {
+  GROUP_ORDER_STATUSES,
+  GroupOrderStatusValue,
+} from './create-group-order.dto';
 
-export class ListBlocksDto {
+export class ListGroupOrdersDto {
   @ApiPropertyOptional({ example: 1, default: 1 })
   @IsOptional()
   @Type(() => Number)
@@ -27,27 +31,29 @@ export class ListBlocksDto {
   @Max(100)
   pageSize?: number = 10;
 
-  @ApiPropertyOptional({ example: '34-35' })
+  @ApiPropertyOptional({ example: 'Horana' })
   @IsOptional()
   @IsString()
   @MaxLength(200)
   search?: string;
 
-  @ApiPropertyOptional({ example: 'category_cuid' })
+  @ApiPropertyOptional({ example: 'DRAFT', enum: GROUP_ORDER_STATUSES })
   @IsOptional()
-  @IsString()
-  categoryId?: string;
+  @IsIn(GROUP_ORDER_STATUSES)
+  status?: GroupOrderStatusValue;
 
   @ApiPropertyOptional({ example: 'customer_cuid' })
   @IsOptional()
   @IsString()
-  customerId?: string;
+  coordinatorCustomerId?: string;
 
-  @ApiPropertyOptional({
-    example: BlockStatus.ACTIVE,
-    enum: BlockStatus,
-  })
+  @ApiPropertyOptional({ example: '2026-04-01T00:00:00.000Z' })
   @IsOptional()
-  @IsEnum(BlockStatus)
-  status?: BlockStatus;
+  @IsDateString()
+  fromDate?: string;
+
+  @ApiPropertyOptional({ example: '2026-04-30T23:59:59.000Z' })
+  @IsOptional()
+  @IsDateString()
+  toDate?: string;
 }

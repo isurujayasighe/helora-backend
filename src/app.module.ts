@@ -18,6 +18,7 @@ import { CategoriesModule } from './categories/categories.module';
 import { OrdersModule } from './orders/orders.module';
 import { ConfigModule } from '@nestjs/config/dist/config.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
+import { GroupOrdersModule } from './group-orders/group-orders.module';
 
 @Module({
   imports: [
@@ -47,7 +48,8 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
     OrdersModule,
     AuditModule,
     SessionsModule,
-    WhatsappModule
+    WhatsappModule,
+    GroupOrdersModule,
   ],
   providers: [
     {

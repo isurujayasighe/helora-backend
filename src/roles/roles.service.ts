@@ -7,11 +7,16 @@ export class RolesService {
 
   async getUserAuthorization(userId: string, tenantId: string) {
     const membership = await this.prisma.membership.findUnique({
-      where: { userId_tenantId: { userId, tenantId } },
+      where: {
+        userId_tenantId: {
+          userId,
+          tenantId,
+        },
+      },
       include: {
         role: {
           include: {
-            permissions: {
+            rolePermissions: {
               include: {
                 permission: true,
               },
@@ -26,10 +31,16 @@ export class RolesService {
     }
 
     const roles = [membership.role.code];
-    const permissions = membership.role.permissions.map(
-      (item) => `${item.permission.resource}:${item.permission.action.toLowerCase()}`,
+
+    const permissions = membership.role.rolePermissions.map(
+      (item) =>
+        `${item.permission.resource}:${item.permission.action.toLowerCase()}`,
     );
 
-    return { membership, roles, permissions };
+    return {
+      membership,
+      roles,
+      permissions,
+    };
   }
 }
