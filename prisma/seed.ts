@@ -3,6 +3,15 @@ import {
   PermissionAction,
   UserStatus,
   BlockStatus,
+  MeasurementFieldInputType,
+  MeasurementVerificationStatus,
+  GroupOrderStatus,
+  OrderType,
+  OrderStatus,
+  OrderSource,
+  PaymentStatus,
+  OrderPaymentMode,
+  OrderItemStatus,
 } from '@prisma/client';
 import * as argon2 from 'argon2';
 
@@ -11,7 +20,10 @@ const prisma = new PrismaClient();
 async function main() {
   const tenant = await prisma.tenant.upsert({
     where: { slug: 'demo-garments' },
-    update: {},
+    update: {
+      name: 'Demo Garments',
+      isActive: true,
+    },
     create: {
       name: 'Demo Garments',
       slug: 'demo-garments',
@@ -38,10 +50,25 @@ async function main() {
     ['blocks', PermissionAction.UPDATE],
     ['blocks', PermissionAction.DELETE],
 
+    ['measurement-fields', PermissionAction.CREATE],
+    ['measurement-fields', PermissionAction.READ],
+    ['measurement-fields', PermissionAction.UPDATE],
+    ['measurement-fields', PermissionAction.DELETE],
+
+    ['measurements', PermissionAction.CREATE],
+    ['measurements', PermissionAction.READ],
+    ['measurements', PermissionAction.UPDATE],
+    ['measurements', PermissionAction.DELETE],
+
     ['orders', PermissionAction.CREATE],
     ['orders', PermissionAction.READ],
     ['orders', PermissionAction.UPDATE],
     ['orders', PermissionAction.DELETE],
+
+    ['group-orders', PermissionAction.CREATE],
+    ['group-orders', PermissionAction.READ],
+    ['group-orders', PermissionAction.UPDATE],
+    ['group-orders', PermissionAction.DELETE],
 
     ['payments', PermissionAction.CREATE],
     ['payments', PermissionAction.READ],
@@ -51,7 +78,11 @@ async function main() {
     ['audit', PermissionAction.READ],
   ] as const;
 
-  const permissions = [];
+  const permissions: {
+    id: string;
+    resource: string;
+    action: PermissionAction;
+  }[] = [];
 
   for (const [resource, action] of permissionSpecs) {
     const permission = await prisma.permission.upsert({
@@ -73,11 +104,27 @@ async function main() {
 
   const adminRole = await prisma.role.upsert({
     where: { code: 'SUPER_ADMIN' },
-    update: {},
+    update: {
+      name: 'Super Admin',
+      description: 'Full access to tenant data and admin actions',
+    },
     create: {
       code: 'SUPER_ADMIN',
       name: 'Super Admin',
       description: 'Full access to tenant data and admin actions',
+    },
+  });
+
+  const viewerRole = await prisma.role.upsert({
+    where: { code: 'VIEWER' },
+    update: {
+      name: 'Viewer',
+      description: 'Read-only access',
+    },
+    create: {
+      code: 'VIEWER',
+      name: 'Viewer',
+      description: 'Read-only access',
     },
   });
 
@@ -92,6 +139,38 @@ async function main() {
       update: {},
       create: {
         roleId: adminRole.id,
+        permissionId: permission.id,
+      },
+    });
+  }
+
+  const viewerPermissions = permissions.filter(
+    (item) =>
+      item.action === PermissionAction.READ &&
+      [
+        'customers',
+        'categories',
+        'blocks',
+        'measurement-fields',
+        'measurements',
+        'orders',
+        'group-orders',
+        'payments',
+        'audit',
+      ].includes(item.resource),
+  );
+
+  for (const permission of viewerPermissions) {
+    await prisma.rolePermission.upsert({
+      where: {
+        roleId_permissionId: {
+          roleId: viewerRole.id,
+          permissionId: permission.id,
+        },
+      },
+      update: {},
+      create: {
+        roleId: viewerRole.id,
         permissionId: permission.id,
       },
     });
@@ -144,7 +223,10 @@ async function main() {
         name: 'Uniform',
       },
     },
-    update: {},
+    update: {
+      description: 'Hospital nurse uniform category',
+      isActive: true,
+    },
     create: {
       tenantId: tenant.id,
       name: 'Uniform',
@@ -160,7 +242,10 @@ async function main() {
         name: 'Blouse',
       },
     },
-    update: {},
+    update: {
+      description: 'Blouse tailoring category',
+      isActive: true,
+    },
     create: {
       tenantId: tenant.id,
       name: 'Blouse',
@@ -169,30 +254,233 @@ async function main() {
     },
   });
 
-  const customer = await prisma.customer.create({
-    data: {
-      tenantId: tenant.id,
-      fullName: 'Dinesha Shamali',
-      phoneNumber: '0718370292',
-      alternatePhone: '0771234567',
-      hospitalName: 'Horana Hospital',
-      town: 'Pasgoda',
-      address: 'No 12, Main Street',
-      notes: 'VIP customer',
-      createdById: admin.id,
-      updatedById: admin.id,
+  const uniformMeasurementFieldSpecs = [
+    {
+      code: 'shoulder',
+      label: 'Shoulder',
+      inputType: MeasurementFieldInputType.DECIMAL,
+      unit: 'inch',
+      sortOrder: 1,
+      isRequired: true,
     },
-  }).catch(async () => {
-    return prisma.customer.findFirstOrThrow({
+    {
+      code: 'chest',
+      label: 'Chest',
+      inputType: MeasurementFieldInputType.DECIMAL,
+      unit: 'inch',
+      sortOrder: 2,
+      isRequired: true,
+    },
+    {
+      code: 'waist',
+      label: 'Waist',
+      inputType: MeasurementFieldInputType.DECIMAL,
+      unit: 'inch',
+      sortOrder: 3,
+      isRequired: true,
+    },
+    {
+      code: 'hip',
+      label: 'Hip',
+      inputType: MeasurementFieldInputType.DECIMAL,
+      unit: 'inch',
+      sortOrder: 4,
+      isRequired: false,
+    },
+    {
+      code: 'top_length',
+      label: 'Top Length',
+      inputType: MeasurementFieldInputType.DECIMAL,
+      unit: 'inch',
+      sortOrder: 5,
+      isRequired: true,
+    },
+    {
+      code: 'sleeve_length',
+      label: 'Sleeve Length',
+      inputType: MeasurementFieldInputType.DECIMAL,
+      unit: 'inch',
+      sortOrder: 6,
+      isRequired: true,
+    },
+    {
+      code: 'pant_length',
+      label: 'Pant Length',
+      inputType: MeasurementFieldInputType.DECIMAL,
+      unit: 'inch',
+      sortOrder: 7,
+      isRequired: false,
+    },
+    {
+      code: 'remarks',
+      label: 'Measurement Remarks',
+      inputType: MeasurementFieldInputType.TEXTAREA,
+      unit: null,
+      sortOrder: 8,
+      isRequired: false,
+    },
+  ] as const;
+
+  const uniformFields: Record<string, { id: string }> = {};
+
+  for (const field of uniformMeasurementFieldSpecs) {
+    const createdField = await prisma.measurementField.upsert({
       where: {
+        categoryId_code: {
+          categoryId: uniformCategory.id,
+          code: field.code,
+        },
+      },
+      update: {
         tenantId: tenant.id,
-        phoneNumber: '0718370292',
+        label: field.label,
+        inputType: field.inputType,
+        unit: field.unit,
+        sortOrder: field.sortOrder,
+        isRequired: field.isRequired,
+        isActive: true,
+      },
+      create: {
+        tenantId: tenant.id,
+        categoryId: uniformCategory.id,
+        code: field.code,
+        label: field.label,
+        inputType: field.inputType,
+        unit: field.unit,
+        sortOrder: field.sortOrder,
+        isRequired: field.isRequired,
+        isActive: true,
       },
     });
+
+    uniformFields[field.code] = {
+      id: createdField.id,
+    };
+  }
+
+  const blouseMeasurementFieldSpecs = [
+    {
+      code: 'blouse_length',
+      label: 'Blouse Length',
+      inputType: MeasurementFieldInputType.DECIMAL,
+      unit: 'inch',
+      sortOrder: 1,
+      isRequired: true,
+    },
+    {
+      code: 'chest',
+      label: 'Chest',
+      inputType: MeasurementFieldInputType.DECIMAL,
+      unit: 'inch',
+      sortOrder: 2,
+      isRequired: true,
+    },
+    {
+      code: 'waist',
+      label: 'Waist',
+      inputType: MeasurementFieldInputType.DECIMAL,
+      unit: 'inch',
+      sortOrder: 3,
+      isRequired: true,
+    },
+    {
+      code: 'sleeve_length',
+      label: 'Sleeve Length',
+      inputType: MeasurementFieldInputType.DECIMAL,
+      unit: 'inch',
+      sortOrder: 4,
+      isRequired: true,
+    },
+  ] as const;
+
+  for (const field of blouseMeasurementFieldSpecs) {
+    await prisma.measurementField.upsert({
+      where: {
+        categoryId_code: {
+          categoryId: blouseCategory.id,
+          code: field.code,
+        },
+      },
+      update: {
+        tenantId: tenant.id,
+        label: field.label,
+        inputType: field.inputType,
+        unit: field.unit,
+        sortOrder: field.sortOrder,
+        isRequired: field.isRequired,
+        isActive: true,
+      },
+      create: {
+        tenantId: tenant.id,
+        categoryId: blouseCategory.id,
+        code: field.code,
+        label: field.label,
+        inputType: field.inputType,
+        unit: field.unit,
+        sortOrder: field.sortOrder,
+        isRequired: field.isRequired,
+        isActive: true,
+      },
+    });
+  }
+
+  let customer = await prisma.customer.findFirst({
+    where: {
+      tenantId: tenant.id,
+      phoneNumber: '0718370292',
+    },
   });
 
-  const block = await prisma.block.create({
-    data: {
+  if (!customer) {
+    customer = await prisma.customer.create({
+      data: {
+        tenantId: tenant.id,
+        fullName: 'Dinesha Shamali',
+        phoneNumber: '0718370292',
+        alternatePhone: '0771234567',
+        hospitalName: 'Horana Hospital',
+        town: 'Pasgoda',
+        address: 'No 12, Main Street',
+        notes: 'VIP customer',
+        createdById: admin.id,
+        updatedById: admin.id,
+      },
+    });
+  } else {
+    customer = await prisma.customer.update({
+      where: { id: customer.id },
+      data: {
+        fullName: 'Dinesha Shamali',
+        alternatePhone: '0771234567',
+        hospitalName: 'Horana Hospital',
+        town: 'Pasgoda',
+        address: 'No 12, Main Street',
+        notes: 'VIP customer',
+        updatedById: admin.id,
+      },
+    });
+  }
+
+  const block = await prisma.block.upsert({
+    where: {
+      tenantId_blockNumber_categoryId: {
+        tenantId: tenant.id,
+        blockNumber: 'UNI-1001',
+        categoryId: uniformCategory.id,
+      },
+    },
+    update: {
+      readyMadeSize: 'M',
+      sizeLabel: 'Standard Medium',
+      fitNotes: 'Uniform block for regular fit',
+      versionNo: 1,
+      description: 'Sample uniform block',
+      status: BlockStatus.ACTIVE,
+      remarks: 'Default uniform block',
+      legacyId: 52,
+      updatedById: admin.id,
+    },
+    create: {
       tenantId: tenant.id,
       categoryId: uniformCategory.id,
       blockNumber: 'UNI-1001',
@@ -207,14 +495,6 @@ async function main() {
       createdById: admin.id,
       updatedById: admin.id,
     },
-  }).catch(async () => {
-    return prisma.block.findFirstOrThrow({
-      where: {
-        tenantId: tenant.id,
-        blockNumber: 'UNI-1001',
-        categoryId: uniformCategory.id,
-      },
-    });
   });
 
   await prisma.customerBlock.upsert({
@@ -225,6 +505,7 @@ async function main() {
       },
     },
     update: {
+      tenantId: tenant.id,
       isDefault: true,
       assignedById: admin.id,
     },
@@ -237,8 +518,146 @@ async function main() {
     },
   });
 
-  const groupOrder = await prisma.groupOrder.create({
-    data: {
+  const measurement = await prisma.measurement.upsert({
+    where: {
+      tenantId_measurementNumber: {
+        tenantId: tenant.id,
+        measurementNumber: 'MSR-00001',
+      },
+    },
+    update: {
+      customerId: customer.id,
+      blockId: block.id,
+      categoryId: uniformCategory.id,
+      verificationStatus: MeasurementVerificationStatus.VERIFIED_OK,
+      verifiedAt: new Date(),
+      verifiedById: admin.id,
+      verificationNote: 'Seed measurement verified by customer over phone.',
+      isActive: true,
+      versionNo: 1,
+      notes: 'Sample nurse uniform measurement set.',
+      updatedById: admin.id,
+    },
+    create: {
+      tenantId: tenant.id,
+      customerId: customer.id,
+      blockId: block.id,
+      categoryId: uniformCategory.id,
+      measurementNumber: 'MSR-00001',
+      verificationStatus: MeasurementVerificationStatus.VERIFIED_OK,
+      verifiedAt: new Date(),
+      verifiedById: admin.id,
+      verificationNote: 'Seed measurement verified by customer over phone.',
+      isActive: true,
+      versionNo: 1,
+      notes: 'Sample nurse uniform measurement set.',
+      createdById: admin.id,
+      updatedById: admin.id,
+    },
+  });
+
+  const measurementValues = [
+    {
+      fieldCode: 'shoulder',
+      value: '14.5',
+      numericValue: 14.5,
+      note: null,
+    },
+    {
+      fieldCode: 'chest',
+      value: '34',
+      numericValue: 34,
+      note: null,
+    },
+    {
+      fieldCode: 'waist',
+      value: '30',
+      numericValue: 30,
+      note: null,
+    },
+    {
+      fieldCode: 'hip',
+      value: '36',
+      numericValue: 36,
+      note: null,
+    },
+    {
+      fieldCode: 'top_length',
+      value: '27',
+      numericValue: 27,
+      note: null,
+    },
+    {
+      fieldCode: 'sleeve_length',
+      value: '8.5',
+      numericValue: 8.5,
+      note: null,
+    },
+    {
+      fieldCode: 'pant_length',
+      value: '38',
+      numericValue: 38,
+      note: null,
+    },
+    {
+      fieldCode: 'remarks',
+      value: 'Regular fit. Customer confirmed previous measurements are okay.',
+      numericValue: null,
+      note: 'Seed note',
+    },
+  ];
+
+  for (const item of measurementValues) {
+    const field = uniformFields[item.fieldCode];
+
+    if (!field) {
+      continue;
+    }
+
+    await prisma.measurementValue.upsert({
+      where: {
+        measurementId_fieldId: {
+          measurementId: measurement.id,
+          fieldId: field.id,
+        },
+      },
+      update: {
+        value: item.value,
+        numericValue: item.numericValue,
+        note: item.note,
+      },
+      create: {
+        measurementId: measurement.id,
+        fieldId: field.id,
+        value: item.value,
+        numericValue: item.numericValue,
+        note: item.note,
+      },
+    });
+  }
+
+  const groupOrder = await prisma.groupOrder.upsert({
+    where: {
+      tenantId_groupOrderNumber: {
+        tenantId: tenant.id,
+        groupOrderNumber: 'GRP-00001',
+      },
+    },
+    update: {
+      title: 'Horana Hospital Nurses - April Batch',
+      coordinatorCustomerId: customer.id,
+      hospitalName: 'Horana Hospital',
+      town: 'Horana',
+      contactName: 'Dinesha Shamali',
+      contactPhone: '0718370292',
+      deliveryAddress: 'No 12, Main Street, Horana',
+      deliveryTown: 'Horana',
+      status: GroupOrderStatus.CONFIRMED,
+      expectedDeliveryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      notes: 'Deliver all uniforms together',
+      updatedById: admin.id,
+    },
+    create: {
       tenantId: tenant.id,
       groupOrderNumber: 'GRP-00001',
       title: 'Horana Hospital Nurses - April Batch',
@@ -249,19 +668,12 @@ async function main() {
       contactPhone: '0718370292',
       deliveryAddress: 'No 12, Main Street, Horana',
       deliveryTown: 'Horana',
-      status: 'CONFIRMED',
+      status: GroupOrderStatus.CONFIRMED,
       expectedDeliveryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       notes: 'Deliver all uniforms together',
       createdById: admin.id,
       updatedById: admin.id,
     },
-  }).catch(async () => {
-    return prisma.groupOrder.findFirstOrThrow({
-      where: {
-        tenantId: tenant.id,
-        groupOrderNumber: 'GRP-00001',
-      },
-    });
   });
 
   const order = await prisma.order.upsert({
@@ -271,20 +683,39 @@ async function main() {
         orderNumber: 'ORD-1001',
       },
     },
-    update: {},
+    update: {
+      customerId: customer.id,
+      groupOrderId: groupOrder.id,
+      orderType: OrderType.GROUP_MEMBER,
+      hospitalName: 'Horana Hospital',
+      town: 'Pasgoda',
+      customerAddress: 'No 12, Main Street',
+      status: OrderStatus.PENDING,
+      orderSource: OrderSource.PHONE_CALL,
+      paymentStatus: PaymentStatus.ADVANCE_PAID,
+      paymentMode: OrderPaymentMode.CASH,
+      totalQty: 1,
+      totalAmount: 2500,
+      advanceAmount: 1000,
+      balanceAmount: 1500,
+      courierCharges: 0,
+      promisedDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      notes: 'Seed sample order linked to group order and measurement.',
+      updatedById: admin.id,
+    },
     create: {
       tenantId: tenant.id,
       orderNumber: 'ORD-1001',
       customerId: customer.id,
       groupOrderId: groupOrder.id,
-      orderType: 'GROUP_MEMBER',
+      orderType: OrderType.GROUP_MEMBER,
       hospitalName: 'Horana Hospital',
       town: 'Pasgoda',
       customerAddress: 'No 12, Main Street',
-      status: 'PENDING',
-      orderSource: 'PHONE_CALL',
-      paymentStatus: 'ADVANCE_PAID',
-      paymentMode: 'CASH',
+      status: OrderStatus.PENDING,
+      orderSource: OrderSource.PHONE_CALL,
+      paymentStatus: PaymentStatus.ADVANCE_PAID,
+      paymentMode: OrderPaymentMode.CASH,
       totalQty: 1,
       totalAmount: 2500,
       advanceAmount: 1000,
@@ -292,9 +723,15 @@ async function main() {
       courierCharges: 0,
       orderDate: new Date(),
       promisedDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      notes: 'Seed sample order',
+      notes: 'Seed sample order linked to group order and measurement.',
       createdById: admin.id,
       updatedById: admin.id,
+    },
+  });
+
+  await prisma.orderItem.deleteMany({
+    where: {
+      orderId: order.id,
     },
   });
 
@@ -303,22 +740,44 @@ async function main() {
       orderId: order.id,
       categoryId: uniformCategory.id,
       blockId: block.id,
+      measurementId: measurement.id,
       itemDescription: 'Nurse uniform',
       quantity: 1,
       unitPrice: 2500,
       lineTotal: 2500,
-      notes: 'Seed sample uniform order item',
-      status: 'PENDING',
+      notes: 'Seed sample uniform order item with confirmed measurement.',
+      status: OrderItemStatus.PENDING,
     },
-  }).catch(() => null);
+  });
+
+  await prisma.groupOrder.update({
+    where: {
+      id: groupOrder.id,
+    },
+    data: {
+      totalOrders: 1,
+      totalQty: 1,
+      totalAmount: 2500,
+      advanceAmount: 1000,
+      balanceAmount: 1500,
+      courierCharges: 0,
+    },
+  });
 
   console.log('Seed completed successfully');
   console.log('Login email: admin@helora.local');
   console.log('Login password: Admin@12345');
+  console.log(`Tenant ID: ${tenant.id}`);
+  console.log(`Customer ID: ${customer.id}`);
+  console.log(`Block ID: ${block.id}`);
+  console.log(`Measurement ID: ${measurement.id}`);
+  console.log(`Group Order ID: ${groupOrder.id}`);
+  console.log(`Order ID: ${order.id}`);
 }
 
 main()
   .catch((error) => {
+    console.error('Seed failed');
     console.error(error);
     process.exit(1);
   })
