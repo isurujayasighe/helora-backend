@@ -20,6 +20,7 @@ import { ConfigModule } from '@nestjs/config/dist/config.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { GroupOrdersModule } from './group-orders/group-orders.module';
 import { MeasurementsModule } from './measurements/measurements.module';
+import { AttendanceModule } from './attendance/attendance.module';
 
 @Module({
   imports: [
@@ -51,7 +52,8 @@ import { MeasurementsModule } from './measurements/measurements.module';
     SessionsModule,
     WhatsappModule,
     GroupOrdersModule,
-    MeasurementsModule
+    MeasurementsModule,
+    AttendanceModule
   ],
   providers: [
     {
