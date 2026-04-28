@@ -20,6 +20,7 @@ async function bootstrap() {
       "http://localhost:5173",
       "http://localhost:5174",
       "http://localhost:5175",
+      "https://your-frontend.up.railway.app",
     ],
     credentials: true,
   });
@@ -39,7 +40,7 @@ async function bootstrap() {
       transform: true,
       forbidNonWhitelisted: true,
       transformOptions: { enableImplicitConversion: true },
-    })
+    }),
   );
 
   app.useGlobalFilters(new GlobalExceptionFilter());
@@ -48,7 +49,7 @@ async function bootstrap() {
   const swaggerConfig = new DocumentBuilder()
     .setTitle("Helora Backend API")
     .setDescription(
-      "Starter backend with auth, CQRS, RBAC, refresh cookies, and Prisma."
+      "Starter backend with auth, CQRS, RBAC, refresh cookies, and Prisma.",
     )
     .setVersion("1.0.0")
     .addBearerAuth()
