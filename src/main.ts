@@ -21,6 +21,7 @@ async function bootstrap() {
       "http://localhost:5174",
       "http://localhost:5175",
       "https://helora-frontend.isuruwanjayasinghe.workers.dev",
+      "https://bridge-cb-frontend-prod-ukw-cjc9b3emfcemhegh.ukwest-01.azurewebsites.net"
     ],
     credentials: true,
   });
