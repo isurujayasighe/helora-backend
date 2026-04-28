@@ -20,7 +20,7 @@ async function bootstrap() {
       "http://localhost:5173",
       "http://localhost:5174",
       "http://localhost:5175",
-      "https://your-frontend.up.railway.app",
+      "https://cloudflare-workers-autoconfig-helora-frontend.isuruwanjayasinghe.workers.dev",
     ],
     credentials: true,
   });
