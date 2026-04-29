@@ -295,59 +295,87 @@ export class GroupOrdersService {
 
   async getGroupOrderById(params: { id: string; tenantId: string }) {
     const groupOrder = await this.prisma.groupOrder.findFirst({
-      where: {
-        id: params.id,
-        tenantId: params.tenantId,
+  where: {
+    id: params.id,
+    tenantId: params.tenantId,
+  },
+  select: {
+    id: true,
+    groupOrderNumber: true,
+    title: true,
+    hospitalName: true,
+    town: true,
+    contactName: true,
+    contactPhone: true,
+    deliveryAddress: true,
+    deliveryTown: true,
+    status: true,
+    totalOrders: true,
+    totalQty: true,
+    totalAmount: true,
+    advanceAmount: true,
+    balanceAmount: true,
+    expectedDeliveryDate: true,
+    notes: true,
+
+    coordinatorCustomer: {
+      select: {
+        id: true,
+        fullName: true,
+        phoneNumber: true,
+        town: true,
       },
-      include: {
-        coordinatorCustomer: true,
-        payments: {
-          orderBy: {
-            paymentDate: 'desc',
+    },
+
+    orders: {
+      orderBy: {
+        createdAt: 'desc',
+      },
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        paymentStatus: true,
+        totalQty: true,
+        totalAmount: true,
+        advanceAmount: true,
+        balanceAmount: true,
+        orderDate: true,
+        promisedDate: true,
+
+        customer: {
+          select: {
+            id: true,
+            fullName: true,
+            phoneNumber: true,
+            town: true,
           },
         },
-        orders: {
-          include: {
-            customer: true,
-            payments: true,
-            items: {
-              include: {
-                category: true,
-                block: {
-                  include: {
-                    category: true,
-                    customerBlocks: {
-                      include: {
-                        customer: true,
-                      },
-                    },
-                  },
-                },
-                measurement: {
-                  include: {
-                    values: {
-                      include: {
-                        field: true,
-                      },
-                    },
-                  },
-                },
+
+        items: {
+          select: {
+            id: true,
+            itemDescription: true,
+            quantity: true,
+            category: {
+              select: {
+                id: true,
+                name: true,
               },
             },
           },
-          orderBy: {
-            createdAt: 'desc',
-          },
-        },
-        _count: {
-          select: {
-            orders: true,
-            payments: true,
-          },
         },
       },
-    });
+    },
 
+    _count: {
+      select: {
+        orders: true,
+        payments: true,
+      },
+    },
+  },
+});
     if (!groupOrder) {
       throw new NotFoundException('Group order not found');
     }
