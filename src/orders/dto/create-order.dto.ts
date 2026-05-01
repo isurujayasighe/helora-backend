@@ -1,226 +1,322 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
 import {
-  ArrayMinSize,
   IsArray,
   IsDateString,
-  IsIn,
-  IsNotEmpty,
+  IsEnum,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
-  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
-import {
-  ORDER_ITEM_STATUSES,
-  ORDER_PAYMENT_MODES,
-  ORDER_SOURCES,
-  ORDER_STATUSES,
-  PAYMENT_STATUSES,
-  OrderItemStatusValue,
-  OrderPaymentModeValue,
-  OrderSourceValue,
-  OrderStatusValue,
-  PaymentStatusValue,
-} from './order-options.dto';
+import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+export enum CreateOrderStatusDto {
+  PENDING = 'PENDING',
+  CONFIRMED = 'CONFIRMED',
+  CUTTING = 'CUTTING',
+  SEWING = 'SEWING',
+  READY = 'READY',
+  DELIVERED = 'DELIVERED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum CreateOrderSourceDto {
+  DREZAURA = 'DREZAURA',
+  PHYSICAL_SHOP = 'PHYSICAL_SHOP',
+  PHONE_CALL = 'PHONE_CALL',
+  WHATSAPP = 'WHATSAPP',
+  ONLINE = 'ONLINE',
+}
+
+export enum CreatePaymentStatusDto {
+  UNPAID = 'UNPAID',
+  ADVANCE_PAID = 'ADVANCE_PAID',
+  PARTIALLY_PAID = 'PARTIALLY_PAID',
+  PAID = 'PAID',
+  REFUNDED = 'REFUNDED',
+}
+
+export enum CreateOrderPaymentModeDto {
+  CASH = 'CASH',
+  ONLINE_TRANSFER = 'ONLINE_TRANSFER',
+  BANK_DEPOSIT = 'BANK_DEPOSIT',
+  CARD = 'CARD',
+  MIXED = 'MIXED',
+}
+
+export enum CreateOrderItemStatusDto {
+  PENDING = 'PENDING',
+  CUTTING = 'CUTTING',
+  SEWING = 'SEWING',
+  READY = 'READY',
+  DELIVERED = 'DELIVERED',
+  CANCELLED = 'CANCELLED',
+}
 
 export class CreateOrderItemDto {
-  @ApiProperty({ example: 'category_cuid' })
+  @ApiProperty({
+    example: 'category_cuid',
+  })
   @IsString()
-  @IsNotEmpty()
   categoryId!: string;
 
-  @ApiPropertyOptional({ example: 'block_cuid' })
+  @ApiPropertyOptional({
+    example: 'block_cuid',
+  })
   @IsOptional()
   @IsString()
-  blockId?: string | null;
+  blockId?: string;
 
-  @ApiPropertyOptional({ example: 'measurement_cuid' })
+  @ApiPropertyOptional({
+    example: 'measurement_cuid',
+    description:
+      'Existing measurement id. If not provided, backend can create a new measurement using measurements object.',
+  })
   @IsOptional()
   @IsString()
-  measurementId?: string | null;
+  measurementId?: string;
 
-  @ApiPropertyOptional({ example: 'Nurse uniform' })
-  @IsOptional()
+  @ApiProperty({
+    example: 'Nurse uniform',
+  })
   @IsString()
-  itemDescription?: string;
+  itemDescription!: string;
 
-  @ApiPropertyOptional({ example: 1 })
-  @IsOptional()
+  @ApiProperty({
+    example: 1,
+  })
   @Type(() => Number)
   @IsNumber()
   @Min(1)
-  quantity?: number;
+  quantity!: number;
 
-  @ApiPropertyOptional({ example: 2500 })
-  @IsOptional()
+  @ApiProperty({
+    example: 2500,
+  })
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  unitPrice?: number;
+  unitPrice!: number;
 
-  @ApiPropertyOptional({ example: 2500 })
-  @IsOptional()
+  @ApiProperty({
+    example: 2500,
+  })
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  lineTotal?: number;
-
-  @ApiPropertyOptional({ example: 'Customer requested loose fit' })
-  @IsOptional()
-  @IsString()
-  notes?: string | null;
-
-  @ApiPropertyOptional({ example: 'Use previous cutting style' })
-  @IsOptional()
-  @IsString()
-  tailorNote?: string | null;
+  lineTotal!: number;
 
   @ApiPropertyOptional({
-    example: 'PENDING',
-    enum: ORDER_ITEM_STATUSES,
+    example: 'Customer requested loose fit',
   })
   @IsOptional()
-  @IsIn(ORDER_ITEM_STATUSES)
-  status?: OrderItemStatusValue;
+  @IsString()
+  notes?: string;
+
+  @ApiPropertyOptional({
+    example: 'Use previous cutting style',
+  })
+  @IsOptional()
+  @IsString()
+  tailorNote?: string;
+
+  @ApiPropertyOptional({
+    enum: CreateOrderItemStatusDto,
+    example: CreateOrderItemStatusDto.PENDING,
+  })
+  @IsOptional()
+  @IsEnum(CreateOrderItemStatusDto)
+  status?: CreateOrderItemStatusDto;
+
+  @ApiPropertyOptional({
+    example: {
+      shoulder: '14.5',
+      chest: '34',
+      waist: '39',
+      hip: '36',
+    },
+    description:
+      'Measurement values by measurement field code. Used only when measurementId is not provided.',
+  })
+  @IsOptional()
+  @IsObject()
+  measurements?: Record<string, string | number | null>;
+
+  @ApiPropertyOptional({
+    example: 'Measurements taken while placing order.',
+  })
+  @IsOptional()
+  @IsString()
+  measurementNote?: string;
 }
 
 export class CreateOrderDto {
-  @ApiProperty({ example: 'customer_cuid' })
+  @ApiProperty({
+    example: 'customer_cuid',
+  })
   @IsString()
-  @IsNotEmpty()
   customerId!: string;
 
-  @ApiPropertyOptional({ example: 'group_order_cuid' })
+  @ApiPropertyOptional({
+    example: 'group_order_cuid',
+  })
   @IsOptional()
   @IsString()
-  groupOrderId?: string | null;
+  groupOrderId?: string;
 
-  @ApiProperty({ example: 'ORD-1001' })
+  @ApiPropertyOptional({
+    example: 'ORD-1001',
+  })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  @MaxLength(100)
-  orderNumber!: string;
+  orderNumber?: string;
 
-  @ApiPropertyOptional({ example: '2026-04-25T00:00:00.000Z' })
+  @ApiPropertyOptional({
+    example: '2026-04-25T00:00:00.000Z',
+  })
   @IsOptional()
   @IsDateString()
   orderDate?: string;
 
-  @ApiPropertyOptional({ example: '2026-05-02T00:00:00.000Z' })
+  @ApiPropertyOptional({
+    example: '2026-05-02T00:00:00.000Z',
+  })
   @IsOptional()
   @IsDateString()
-  promisedDate?: string | null;
+  promisedDate?: string;
 
-  @ApiPropertyOptional({ example: '2026-05-02T00:00:00.000Z' })
+  @ApiPropertyOptional({
+    example: '2026-05-02T00:00:00.000Z',
+  })
   @IsOptional()
   @IsDateString()
-  completedAt?: string | null;
+  completedAt?: string;
 
-  @ApiPropertyOptional({ example: '2026-05-02T00:00:00.000Z' })
+  @ApiPropertyOptional({
+    example: '2026-05-02T00:00:00.000Z',
+  })
   @IsOptional()
   @IsDateString()
-  deliveredAt?: string | null;
+  deliveredAt?: string;
 
   @ApiPropertyOptional({
-    example: 'PENDING',
-    enum: ORDER_STATUSES,
+    enum: CreateOrderStatusDto,
+    example: CreateOrderStatusDto.PENDING,
   })
   @IsOptional()
-  @IsIn(ORDER_STATUSES)
-  status?: OrderStatusValue;
+  @IsEnum(CreateOrderStatusDto)
+  status?: CreateOrderStatusDto;
 
   @ApiPropertyOptional({
-    example: 'PHYSICAL_SHOP',
-    enum: ORDER_SOURCES,
+    enum: CreateOrderSourceDto,
+    example: CreateOrderSourceDto.PHYSICAL_SHOP,
   })
   @IsOptional()
-  @IsIn(ORDER_SOURCES)
-  orderSource?: OrderSourceValue;
+  @IsEnum(CreateOrderSourceDto)
+  orderSource?: CreateOrderSourceDto;
 
   @ApiPropertyOptional({
-    example: 'UNPAID',
-    enum: PAYMENT_STATUSES,
+    enum: CreatePaymentStatusDto,
+    example: CreatePaymentStatusDto.UNPAID,
   })
   @IsOptional()
-  @IsIn(PAYMENT_STATUSES)
-  paymentStatus?: PaymentStatusValue;
+  @IsEnum(CreatePaymentStatusDto)
+  paymentStatus?: CreatePaymentStatusDto;
 
   @ApiPropertyOptional({
-    example: 'CASH',
-    enum: ORDER_PAYMENT_MODES,
+    enum: CreateOrderPaymentModeDto,
+    example: CreateOrderPaymentModeDto.CASH,
   })
   @IsOptional()
-  @IsIn(ORDER_PAYMENT_MODES)
-  paymentMode?: OrderPaymentModeValue | null;
+  @IsEnum(CreateOrderPaymentModeDto)
+  paymentMode?: CreateOrderPaymentModeDto;
 
-  @ApiPropertyOptional({ example: 'Horana Hospital' })
+  @ApiPropertyOptional({
+    example: 'Horana Hospital',
+  })
   @IsOptional()
   @IsString()
-  @MaxLength(200)
-  hospitalName?: string | null;
+  hospitalName?: string;
 
-  @ApiPropertyOptional({ example: 'Horana' })
+  @ApiPropertyOptional({
+    example: 'Horana',
+  })
   @IsOptional()
   @IsString()
-  @MaxLength(100)
-  town?: string | null;
+  town?: string;
 
-  @ApiPropertyOptional({ example: 'No 12, Main Street' })
+  @ApiPropertyOptional({
+    example: 'No 12, Main Street',
+  })
   @IsOptional()
   @IsString()
-  customerAddress?: string | null;
+  customerAddress?: string;
 
-  @ApiPropertyOptional({ example: 2 })
+  @ApiPropertyOptional({
+    example: 2,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   totalQty?: number;
 
-  @ApiPropertyOptional({ example: 2500 })
+  @ApiPropertyOptional({
+    example: 2500,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   totalAmount?: number;
 
-  @ApiPropertyOptional({ example: 1000 })
+  @ApiPropertyOptional({
+    example: 1000,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   advanceAmount?: number;
 
-  @ApiPropertyOptional({ example: 1500 })
+  @ApiPropertyOptional({
+    example: 1500,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   balanceAmount?: number;
 
-  @ApiPropertyOptional({ example: 350 })
+  @ApiPropertyOptional({
+    example: 350,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   courierCharges?: number;
 
-  @ApiPropertyOptional({ example: 'Order note' })
+  @ApiPropertyOptional({
+    example: 'Order note',
+  })
   @IsOptional()
   @IsString()
-  notes?: string | null;
+  notes?: string;
 
-  @ApiPropertyOptional({ example: 'Special delivery note' })
+  @ApiPropertyOptional({
+    example: 'Special delivery note',
+  })
   @IsOptional()
   @IsString()
-  specialNotes?: string | null;
+  specialNotes?: string;
 
-  @ApiProperty({ type: [CreateOrderItemDto] })
+  @ApiProperty({
+    type: [CreateOrderItemDto],
+  })
   @IsArray()
-  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)
   items!: CreateOrderItemDto[];

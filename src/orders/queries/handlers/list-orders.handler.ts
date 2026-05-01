@@ -7,7 +7,7 @@ export class ListOrdersHandler implements IQueryHandler<ListOrdersQuery> {
   constructor(private readonly ordersService: OrdersService) {}
 
   async execute(query: ListOrdersQuery) {
-    const result = await this.ordersService.listOrders({
+    const result = await this.ordersService.getOrders({
       tenantId: query.currentUser.tenantId,
       ...query.filters,
     });

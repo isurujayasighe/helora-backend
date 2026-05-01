@@ -19,6 +19,8 @@ export class CreateOrderHandler implements ICommandHandler<CreateOrderCommand> {
       orderNumber: payload.orderNumber,
       orderDate: payload.orderDate,
       promisedDate: payload.promisedDate ?? undefined,
+      completedAt: payload.completedAt ?? undefined,
+      deliveredAt: payload.deliveredAt ?? undefined,
 
       status: payload.status,
       orderSource: payload.orderSource,

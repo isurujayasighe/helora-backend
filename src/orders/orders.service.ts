@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { AuditAction, Prisma } from "@prisma/client";
+
 import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { GroupOrdersService } from "../group-orders/group-orders.service";
@@ -23,8 +24,6 @@ type OrderSourceValue =
   | "PHONE_CALL"
   | "WHATSAPP"
   | "ONLINE";
-
-type OrderTypeValue = "INDIVIDUAL" | "GROUP_MEMBER";
 
 type PaymentStatusValue =
   | "UNPAID"
@@ -48,18 +47,36 @@ type OrderItemStatusValue =
   | "DELIVERED"
   | "CANCELLED";
 
-type OrderItemInput = {
+export type OrderItemInput = {
   id?: string;
   categoryId: string;
   blockId?: string | null;
   measurementId?: string | null;
-  itemDescription?: string;
-  quantity?: number;
-  unitPrice?: number;
-  lineTotal?: number;
+
+  itemDescription?: string | null;
+  quantity?: number | null;
+  unitPrice?: number | null;
+  lineTotal?: number | null;
+
   notes?: string | null;
   tailorNote?: string | null;
-  status?: OrderItemStatusValue;
+  status?: OrderItemStatusValue | null;
+
+  /**
+   * Used when measurementId is not available yet.
+   *
+   * Example:
+   * {
+   *   shoulder: "14.5",
+   *   chest: "34",
+   *   waist: "39"
+   * }
+   *
+   * Keys must match MeasurementField.code for the selected category.
+   */
+  measurements?: Record<string, string | number | null | undefined>;
+
+  measurementNote?: string | null;
 };
 
 @Injectable()
@@ -74,9 +91,11 @@ export class OrdersService {
     tenantId: string;
     customerId: string;
     groupOrderId?: string | null;
-    orderNumber: string;
+    orderNumber?: string;
     orderDate?: string;
     promisedDate?: string;
+    completedAt?: string;
+    deliveredAt?: string;
     status?: OrderStatusValue;
     orderSource?: OrderSourceValue;
     paymentStatus?: PaymentStatusValue;
@@ -112,12 +131,15 @@ export class OrdersService {
 
     await this.validateOrderItems({
       tenantId: params.tenantId,
+      customerId: params.customerId,
       items: params.items,
     });
 
     const calculatedTotalQty =
       params.totalQty ??
-      params.items.reduce((sum, item) => sum + Number(item.quantity ?? 1), 0);
+      params.items.reduce((sum, item) => {
+        return sum + Number(item.quantity ?? 1);
+      }, 0);
 
     const calculatedTotalAmount =
       params.totalAmount ??
@@ -131,65 +153,108 @@ export class OrdersService {
 
     const advanceAmount = Number(params.advanceAmount ?? 0);
     const courierCharges = Number(params.courierCharges ?? 0);
+
     const balanceAmount =
-      params.balanceAmount ?? Math.max(calculatedTotalAmount + courierCharges - advanceAmount, 0);
+      params.balanceAmount ??
+      Math.max(calculatedTotalAmount + courierCharges - advanceAmount, 0);
 
-    const order = await this.prisma.order.create({
-  data: {
-    tenantId: params.tenantId,
-    customerId: params.customerId,
-    groupOrderId: params.groupOrderId || undefined,
-    orderType: params.groupOrderId ? 'GROUP_MEMBER' : 'INDIVIDUAL',
-    orderNumber: params.orderNumber.trim(),
+    const order = await this.prisma.$transaction(async (tx) => {
+      const orderNumber =
+        this.clean(params.orderNumber) ??
+        (await this.generateOrderNumber(tx, params.tenantId));
 
-    orderDate: params.orderDate ? new Date(params.orderDate) : new Date(),
-    promisedDate: params.promisedDate ? new Date(params.promisedDate) : undefined,
-   
-    status: params.status ?? 'PENDING',
-    orderSource: params.orderSource ?? 'PHYSICAL_SHOP',
-    paymentStatus:
-      params.paymentStatus ??
-      this.resolvePaymentStatus(advanceAmount, balanceAmount),
-    paymentMode: params.paymentMode || undefined,
+      const createdOrder = await tx.order.create({
+        data: {
+          tenantId: params.tenantId,
+          customerId: params.customerId,
+          groupOrderId: params.groupOrderId || undefined,
+          orderType: params.groupOrderId ? "GROUP_MEMBER" : "INDIVIDUAL",
 
-    hospitalName: this.clean(params.hospitalName),
-    town: this.clean(params.town),
-    customerAddress: this.clean(params.customerAddress),
+          orderNumber,
 
-    totalQty: calculatedTotalQty,
-    totalAmount: calculatedTotalAmount,
-    advanceAmount,
-    balanceAmount,
-    courierCharges,
+          orderDate: params.orderDate ? new Date(params.orderDate) : new Date(),
+          promisedDate: params.promisedDate
+            ? new Date(params.promisedDate)
+            : undefined,
+          completedAt: params.completedAt
+            ? new Date(params.completedAt)
+            : undefined,
+          deliveredAt: params.deliveredAt
+            ? new Date(params.deliveredAt)
+            : undefined,
 
-    notes: this.clean(params.notes),
-    specialNotes: this.clean(params.specialNotes),
+          status: params.status ?? "PENDING",
+          orderSource: params.orderSource ?? "PHYSICAL_SHOP",
 
-    createdById: params.actorUserId,
-    updatedById: params.actorUserId,
+          paymentStatus:
+            params.paymentStatus ??
+            this.resolvePaymentStatus(advanceAmount, balanceAmount),
 
-    items: {
-      create: params.items.map((item) => {
+          paymentMode: params.paymentMode || undefined,
+
+          hospitalName: this.clean(params.hospitalName),
+          town: this.clean(params.town),
+          customerAddress: this.clean(params.customerAddress),
+
+          totalQty: calculatedTotalQty,
+          totalAmount: calculatedTotalAmount,
+          advanceAmount,
+          balanceAmount,
+          courierCharges,
+
+          notes: this.clean(params.notes),
+          specialNotes: this.clean(params.specialNotes),
+
+          createdById: params.actorUserId,
+          updatedById: params.actorUserId,
+        },
+      });
+
+      for (const item of params.items) {
         const quantity = Number(item.quantity ?? 1);
         const unitPrice = Number(item.unitPrice ?? 0);
+        const lineTotal = Number(item.lineTotal ?? quantity * unitPrice);
 
-        return {
-          categoryId: item.categoryId,
-          blockId: item.blockId || undefined,
-          measurementId: item.measurementId || undefined,
-          itemDescription: this.clean(item.itemDescription) ?? 'Tailoring item',
-          quantity,
-          unitPrice,
-          lineTotal: item.lineTotal ?? quantity * unitPrice,
-          notes: item.notes === null ? null : this.clean(item.notes),
-          tailorNote:
-            item.tailorNote === null ? null : this.clean(item.tailorNote),
-          status: item.status ?? 'PENDING',
-        };
-      }),
-    },
-  },
-});
+        const finalMeasurementId = await this.resolveMeasurementIdForOrderItem(
+          tx,
+          {
+            tenantId: params.tenantId,
+            customerId: params.customerId,
+            actorUserId: params.actorUserId,
+            item,
+          },
+        );
+
+        await tx.orderItem.create({
+          data: {
+            tenantId: params.tenantId,
+            orderId: createdOrder.id,
+
+            categoryId: item.categoryId,
+            blockId: item.blockId || undefined,
+            measurementId: finalMeasurementId || undefined,
+
+            itemDescription:
+              this.clean(item.itemDescription) ?? "Tailoring item",
+
+            quantity,
+            unitPrice,
+            lineTotal,
+
+            notes: item.notes === null ? null : this.clean(item.notes),
+            tailorNote:
+              item.tailorNote === null ? null : this.clean(item.tailorNote),
+
+            status: item.status ?? "PENDING",
+
+            createdById: params.actorUserId,
+            updatedById: params.actorUserId,
+          },
+        });
+      }
+
+      return createdOrder;
+    });
 
     if (params.groupOrderId) {
       await this.groupOrdersService.recalculateGroupOrderTotals({
@@ -219,402 +284,116 @@ export class OrdersService {
     });
   }
 
-  async updateOrder(params: {
-    id: string;
-    tenantId: string;
-    customerId?: string;
-    groupOrderId?: string | null;
-    orderNumber?: string;
-    orderDate?: string;
-    promisedDate?: string | null;
-    completedAt?: string | null;
-    deliveredAt?: string | null;
-    status?: OrderStatusValue;
-    orderSource?: OrderSourceValue;
-    paymentStatus?: PaymentStatusValue;
-    paymentMode?: OrderPaymentModeValue | null;
-    hospitalName?: string | null;
-    town?: string | null;
-    customerAddress?: string | null;
-    totalQty?: number;
-    totalAmount?: number;
-    advanceAmount?: number;
-    balanceAmount?: number;
-    courierCharges?: number;
-    notes?: string | null;
-    specialNotes?: string | null;
-    items?: OrderItemInput[];
-    actorUserId: string;
-  }) {
-    const existing = await this.prisma.order.findFirst({
-      where: {
-        id: params.id,
-        tenantId: params.tenantId,
-      },
-      include: {
-        items: true,
-      },
-    });
 
-    if (!existing) {
-      throw new NotFoundException("Order not found.");
-    }
 
-    if (params.customerId) {
-      await this.validateCustomer({
-        tenantId: params.tenantId,
-        customerId: params.customerId,
-      });
-    }
-
-    if (params.groupOrderId) {
-      await this.validateGroupOrder({
-        tenantId: params.tenantId,
-        groupOrderId: params.groupOrderId,
-      });
-    }
-
-    if (params.items) {
-      if (!params.items.length) {
-        throw new BadRequestException("At least one order item is required.");
-      }
-
-      await this.validateOrderItems({
-        tenantId: params.tenantId,
-        items: params.items,
-      });
-    }
-
-    const nextGroupOrderId =
-      params.groupOrderId === undefined
-        ? existing.groupOrderId
-        : params.groupOrderId || null;
-
-    const calculatedTotalQty =
-      params.totalQty ??
-      (params.items
-        ? params.items.reduce((sum, item) => sum + Number(item.quantity ?? 1), 0)
-        : undefined);
-
-    const calculatedTotalAmount =
-      params.totalAmount ??
-      (params.items
-        ? params.items.reduce((sum, item) => {
-            const quantity = Number(item.quantity ?? 1);
-            const unitPrice = Number(item.unitPrice ?? 0);
-            const lineTotal = item.lineTotal ?? quantity * unitPrice;
-
-            return sum + Number(lineTotal);
-          }, 0)
-        : undefined);
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.order.update({
-        where: {
-          id: params.id,
-        },
-        data: {
-          customerId: params.customerId,
-          groupOrderId:
-            params.groupOrderId === undefined ? undefined : nextGroupOrderId,
-          orderType:
-            params.groupOrderId === undefined
-              ? undefined
-              : ((nextGroupOrderId ? "GROUP_MEMBER" : "INDIVIDUAL") as any),
-          orderNumber: params.orderNumber?.trim(),
-          orderDate: params.orderDate ? new Date(params.orderDate) : undefined,
-          promisedDate:
-            params.promisedDate === undefined
-              ? undefined
-              : params.promisedDate
-                ? new Date(params.promisedDate)
-                : null,
-          completedAt:
-            params.completedAt === undefined
-              ? undefined
-              : params.completedAt
-                ? new Date(params.completedAt)
-                : null,
-          deliveredAt:
-            params.deliveredAt === undefined
-              ? undefined
-              : params.deliveredAt
-                ? new Date(params.deliveredAt)
-                : null,
-          status: params.status as any,
-          orderSource: params.orderSource as any,
-          paymentStatus: params.paymentStatus as any,
-          paymentMode:
-            params.paymentMode === undefined ? undefined : (params.paymentMode as any),
-          hospitalName:
-            params.hospitalName === undefined
-              ? undefined
-              : this.clean(params.hospitalName),
-          town:
-            params.town === undefined ? undefined : this.clean(params.town),
-          customerAddress:
-            params.customerAddress === undefined
-              ? undefined
-              : this.clean(params.customerAddress),
-          totalQty: calculatedTotalQty,
-          totalAmount: calculatedTotalAmount,
-          advanceAmount: params.advanceAmount,
-          balanceAmount: params.balanceAmount,
-          courierCharges: params.courierCharges,
-          notes:
-            params.notes === undefined ? undefined : this.clean(params.notes),
-          specialNotes:
-            params.specialNotes === undefined
-              ? undefined
-              : this.clean(params.specialNotes),
-          updatedById: params.actorUserId,
-        },
-      });
-
-      if (params.items) {
-        await tx.orderItem.deleteMany({
-          where: {
-            orderId: params.id,
-          },
-        });
-
-        await tx.orderItem.createMany({
-          data: params.items.map((item) => {
-            const quantity = Number(item.quantity ?? 1);
-            const unitPrice = Number(item.unitPrice ?? 0);
-
-            return {
-              orderId: params.id,
-              categoryId: item.categoryId,
-              blockId: item.blockId || null,
-              measurementId: item.measurementId || null,
-              itemDescription:
-                this.clean(item.itemDescription) ?? "Tailoring item",
-              quantity,
-              unitPrice,
-              lineTotal: item.lineTotal ?? quantity * unitPrice,
-              notes: item.notes ?? null,
-              tailorNote: item.tailorNote ?? null,
-              status: (item.status ?? "PENDING") as any,
-            };
-          }),
-        });
-      }
-    });
-
-    const groupOrderIdsToRecalculate = [
-      existing.groupOrderId,
-      nextGroupOrderId,
-    ].filter(Boolean) as string[];
-
-    for (const groupOrderId of [...new Set(groupOrderIdsToRecalculate)]) {
-      await this.groupOrdersService.recalculateGroupOrderTotals({
-        tenantId: params.tenantId,
-        groupOrderId,
-      });
-    }
-
-    await this.auditService.log({
-      tenantId: params.tenantId,
-      actorUserId: params.actorUserId,
-      action: AuditAction.UPDATE,
-      entityType: "order",
-      entityId: params.id,
-      metadata: {
-        oldOrderNumber: existing.orderNumber,
-        orderNumber: params.orderNumber ?? existing.orderNumber,
-        groupOrderId: nextGroupOrderId,
-      },
-    });
-
-    return this.getOrderById({
-      id: params.id,
-      tenantId: params.tenantId,
-    });
-  }
-
-  async deleteOrder(params: {
-    id: string;
-    tenantId: string;
-    actorUserId: string;
-  }) {
-    const existing = await this.prisma.order.findFirst({
-      where: {
-        id: params.id,
-        tenantId: params.tenantId,
-      },
-      include: {
-        _count: {
-          select: {
-            items: true,
-            payments: true,
-          },
-        },
-      },
-    });
-
-    if (!existing) {
-      throw new NotFoundException("Order not found.");
-    }
-
-    if (existing._count.payments > 0) {
-      throw new BadRequestException(
-        "Cannot delete this order because it already has payments.",
-      );
-    }
-
-    await this.prisma.order.delete({
-      where: {
-        id: params.id,
-      },
-    });
-
-    if (existing.groupOrderId) {
-      await this.groupOrdersService.recalculateGroupOrderTotals({
-        tenantId: params.tenantId,
-        groupOrderId: existing.groupOrderId,
-      });
-    }
-
-    await this.auditService.log({
-      tenantId: params.tenantId,
-      actorUserId: params.actorUserId,
-      action: AuditAction.DELETE,
-      entityType: "order",
-      entityId: params.id,
-      metadata: {
-        orderNumber: existing.orderNumber,
-        itemCount: existing._count.items,
-        groupOrderId: existing.groupOrderId,
-      },
-    });
-
-    return {
-      success: true,
-    };
-  }
-
-  async listOrders(params: {
+  async getOrders(params: {
     tenantId: string;
     page?: number;
     pageSize?: number;
     search?: string;
     status?: OrderStatusValue;
-    orderSource?: OrderSourceValue;
-    paymentStatus?: PaymentStatusValue;
     orderDate?: string;
     promisedDate?: string;
     customerId?: string;
     groupOrderId?: string;
-    groupOrdersOnly?: boolean;
   }) {
-    const page = params.page ?? 1;
-    const pageSize = params.pageSize ?? 10;
+    const page = Math.max(Number(params.page ?? 1), 1);
+    const pageSize = Math.min(Math.max(Number(params.pageSize ?? 10), 1), 100);
     const skip = (page - 1) * pageSize;
-    const take = pageSize;
-    const search = params.search?.trim();
 
     const where: Prisma.OrderWhereInput = {
       tenantId: params.tenantId,
-      status: params.status as any,
-      orderSource: params.orderSource as any,
-      paymentStatus: params.paymentStatus as any,
-      customerId: params.customerId || undefined,
-      groupOrderId: params.groupOrderId || undefined,
-      OR: search
-        ? [
-            {
-              orderNumber: {
-                contains: search,
-                mode: "insensitive",
-              },
-            },
-            {
-              customer: {
-                fullName: {
-                  contains: search,
-                  mode: "insensitive",
-                },
-              },
-            },
-            {
-              customer: {
-                phoneNumber: {
-                  contains: search,
-                  mode: "insensitive",
-                },
-              },
-            },
-            {
-              groupOrder: {
-                groupOrderNumber: {
-                  contains: search,
-                  mode: "insensitive",
-                },
-              },
-            },
-            {
-              groupOrder: {
-                title: {
-                  contains: search,
-                  mode: "insensitive",
-                },
-              },
-            },
-            {
-              groupOrder: {
-                hospitalName: {
-                  contains: search,
-                  mode: "insensitive",
-                },
-              },
-            },
-          ]
-        : undefined,
     };
 
-    if (params.groupOrdersOnly) {
-      where.groupOrderId = {
-        not: null,
-      };
+    if (params.status) {
+      where.status = params.status;
+    }
+
+    if (params.customerId) {
+      where.customerId = params.customerId;
+    }
+
+    if (params.groupOrderId) {
+      where.groupOrderId = params.groupOrderId;
     }
 
     if (params.orderDate) {
-      const start = new Date(params.orderDate);
-      const end = new Date(params.orderDate);
-      end.setDate(end.getDate() + 1);
+      const start = this.startOfDay(params.orderDate);
+      const end = this.endOfDay(params.orderDate);
 
       where.orderDate = {
         gte: start,
-        lt: end,
+        lte: end,
       };
     }
 
     if (params.promisedDate) {
-      const start = new Date(params.promisedDate);
-      const end = new Date(params.promisedDate);
-      end.setDate(end.getDate() + 1);
+      const start = this.startOfDay(params.promisedDate);
+      const end = this.endOfDay(params.promisedDate);
 
       where.promisedDate = {
         gte: start,
-        lt: end,
+        lte: end,
       };
+    }
+
+    const cleanedSearch = this.clean(params.search);
+
+    if (cleanedSearch) {
+      where.OR = [
+        {
+          orderNumber: {
+            contains: cleanedSearch,
+            mode: "insensitive",
+          },
+        },
+        {
+          hospitalName: {
+            contains: cleanedSearch,
+            mode: "insensitive",
+          },
+        },
+        {
+          town: {
+            contains: cleanedSearch,
+            mode: "insensitive",
+          },
+        },
+        {
+          customer: {
+            fullName: {
+              contains: cleanedSearch,
+              mode: "insensitive",
+            },
+          },
+        },
+        {
+          customer: {
+            phoneNumber: {
+              contains: cleanedSearch,
+              mode: "insensitive",
+            },
+          },
+        },
+      ];
     }
 
     const [items, totalItems] = await this.prisma.$transaction([
       this.prisma.order.findMany({
         where,
+        include: this.orderInclude(),
+        orderBy: {
+          createdAt: "desc",
+        },
         skip,
-        take,
-        orderBy: [{ orderDate: "desc" }, { createdAt: "desc" }],
-        include: this.listInclude(),
+        take: pageSize,
       }),
       this.prisma.order.count({
         where,
       }),
     ]);
 
-    const totalPages = Math.ceil(totalItems / pageSize);
+    const totalPages = Math.max(Math.ceil(totalItems / pageSize), 1);
 
     return {
       items,
@@ -629,13 +408,15 @@ export class OrdersService {
     };
   }
 
+
+
   async getOrderById(params: { id: string; tenantId: string }) {
     const order = await this.prisma.order.findFirst({
       where: {
         id: params.id,
         tenantId: params.tenantId,
       },
-      include: this.detailInclude(),
+      include: this.orderInclude(),
     });
 
     if (!order) {
@@ -643,6 +424,618 @@ export class OrdersService {
     }
 
     return order;
+  }
+
+  async updateOrderStatus(params: {
+    tenantId: string;
+    id: string;
+    status: OrderStatusValue;
+    actorUserId: string;
+  }) {
+    const existingOrder = await this.prisma.order.findFirst({
+      where: {
+        id: params.id,
+        tenantId: params.tenantId,
+      },
+    });
+
+    if (!existingOrder) {
+      throw new NotFoundException("Order not found.");
+    }
+
+    const updatedOrder = await this.prisma.order.update({
+      where: {
+        id: existingOrder.id,
+      },
+      data: {
+        status: params.status,
+        completedAt:
+          params.status === "READY" || params.status === "DELIVERED"
+            ? existingOrder.completedAt ?? new Date()
+            : existingOrder.completedAt,
+        deliveredAt:
+          params.status === "DELIVERED"
+            ? existingOrder.deliveredAt ?? new Date()
+            : existingOrder.deliveredAt,
+        updatedById: params.actorUserId,
+      },
+    });
+
+    if (existingOrder.groupOrderId) {
+      await this.groupOrdersService.recalculateGroupOrderTotals({
+        tenantId: params.tenantId,
+        groupOrderId: existingOrder.groupOrderId,
+      });
+    }
+
+    await this.auditService.log({
+      tenantId: params.tenantId,
+      actorUserId: params.actorUserId,
+      action: AuditAction.UPDATE,
+      entityType: "order",
+      entityId: updatedOrder.id,
+      metadata: {
+        orderNumber: updatedOrder.orderNumber,
+        previousStatus: existingOrder.status,
+        nextStatus: updatedOrder.status,
+      },
+    });
+
+    return this.getOrderById({
+      id: updatedOrder.id,
+      tenantId: params.tenantId,
+    });
+  }
+
+  async updateOrder(params: {
+  id: string;
+  tenantId: string;
+  actorUserId: string;
+
+  customerId?: string;
+  groupOrderId?: string | null;
+  orderNumber?: string;
+  orderDate?: string;
+  promisedDate?: string | null;
+  completedAt?: string | null;
+  deliveredAt?: string | null;
+
+  status?: OrderStatusValue;
+  orderSource?: OrderSourceValue;
+  paymentStatus?: PaymentStatusValue;
+  paymentMode?: OrderPaymentModeValue;
+
+  hospitalName?: string | null;
+  town?: string | null;
+  customerAddress?: string | null;
+
+  totalQty?: number;
+  totalAmount?: number;
+  advanceAmount?: number;
+  balanceAmount?: number;
+  courierCharges?: number;
+
+  notes?: string | null;
+  specialNotes?: string | null;
+
+  items?: OrderItemInput[];
+}) {
+  const existingOrder = await this.prisma.order.findFirst({
+    where: {
+      id: params.id,
+      tenantId: params.tenantId,
+    },
+    include: {
+      items: true,
+    },
+  });
+
+  if (!existingOrder) {
+    throw new NotFoundException('Order not found.');
+  }
+
+  const nextCustomerId = params.customerId ?? existingOrder.customerId;
+  const nextGroupOrderId =
+    params.groupOrderId === undefined
+      ? existingOrder.groupOrderId
+      : params.groupOrderId;
+
+  await this.validateCustomer({
+    tenantId: params.tenantId,
+    customerId: nextCustomerId,
+  });
+
+  if (nextGroupOrderId) {
+    await this.validateGroupOrder({
+      tenantId: params.tenantId,
+      groupOrderId: nextGroupOrderId,
+    });
+  }
+
+  if (params.items?.length) {
+    await this.validateOrderItems({
+      tenantId: params.tenantId,
+      customerId: nextCustomerId,
+      items: params.items,
+    });
+  }
+
+  const sourceItems = params.items?.length ? params.items : existingOrder.items;
+
+  const calculatedTotalQty =
+    params.totalQty ??
+    sourceItems.reduce((sum, item) => {
+      return sum + Number(item.quantity ?? 1);
+    }, 0);
+
+  const calculatedTotalAmount =
+    params.totalAmount ??
+    sourceItems.reduce((sum, item) => {
+      const quantity = Number(item.quantity ?? 1);
+      const unitPrice = Number(item.unitPrice ?? 0);
+      const lineTotal = item.lineTotal ?? quantity * unitPrice;
+
+      return sum + Number(lineTotal);
+    }, 0);
+
+  const advanceAmount = Number(
+    params.advanceAmount ?? existingOrder.advanceAmount ?? 0,
+  );
+
+  const courierCharges = Number(
+    params.courierCharges ?? existingOrder.courierCharges ?? 0,
+  );
+
+  const balanceAmount =
+    params.balanceAmount ??
+    Math.max(calculatedTotalAmount + courierCharges - advanceAmount, 0);
+
+  const updatedOrder = await this.prisma.$transaction(async (tx) => {
+    const order = await tx.order.update({
+      where: {
+        id: existingOrder.id,
+      },
+      data: {
+        customerId: nextCustomerId,
+        groupOrderId: nextGroupOrderId || undefined,
+        orderType: nextGroupOrderId ? 'GROUP_MEMBER' : 'INDIVIDUAL',
+
+        orderNumber:
+          params.orderNumber !== undefined
+            ? this.clean(params.orderNumber) ?? existingOrder.orderNumber
+            : existingOrder.orderNumber,
+
+        orderDate:
+          params.orderDate !== undefined
+            ? new Date(params.orderDate)
+            : existingOrder.orderDate,
+
+        promisedDate:
+          params.promisedDate !== undefined
+            ? params.promisedDate
+              ? new Date(params.promisedDate)
+              : null
+            : existingOrder.promisedDate,
+
+        completedAt:
+          params.completedAt !== undefined
+            ? params.completedAt
+              ? new Date(params.completedAt)
+              : null
+            : existingOrder.completedAt,
+
+        deliveredAt:
+          params.deliveredAt !== undefined
+            ? params.deliveredAt
+              ? new Date(params.deliveredAt)
+              : null
+            : existingOrder.deliveredAt,
+
+        status: params.status ?? existingOrder.status,
+        orderSource: params.orderSource ?? existingOrder.orderSource,
+
+        paymentStatus:
+          params.paymentStatus ??
+          this.resolvePaymentStatus(advanceAmount, balanceAmount),
+
+        paymentMode:
+          params.paymentMode !== undefined
+            ? params.paymentMode || undefined
+            : existingOrder.paymentMode,
+
+        hospitalName:
+          params.hospitalName !== undefined
+            ? this.clean(params.hospitalName)
+            : existingOrder.hospitalName,
+
+        town:
+          params.town !== undefined
+            ? this.clean(params.town)
+            : existingOrder.town,
+
+        customerAddress:
+          params.customerAddress !== undefined
+            ? this.clean(params.customerAddress)
+            : existingOrder.customerAddress,
+
+        totalQty: calculatedTotalQty,
+        totalAmount: calculatedTotalAmount,
+        advanceAmount,
+        balanceAmount,
+        courierCharges,
+
+        notes:
+          params.notes !== undefined
+            ? params.notes === null
+              ? null
+              : this.clean(params.notes)
+            : existingOrder.notes,
+
+        specialNotes:
+          params.specialNotes !== undefined
+            ? params.specialNotes === null
+              ? null
+              : this.clean(params.specialNotes)
+            : existingOrder.specialNotes,
+
+        updatedById: params.actorUserId,
+      },
+    });
+
+    if (params.items) {
+      await tx.orderItem.deleteMany({
+        where: {
+          tenantId: params.tenantId,
+          orderId: existingOrder.id,
+        },
+      });
+
+      for (const item of params.items) {
+        const quantity = Number(item.quantity ?? 1);
+        const unitPrice = Number(item.unitPrice ?? 0);
+        const lineTotal = Number(item.lineTotal ?? quantity * unitPrice);
+
+        const finalMeasurementId = await this.resolveMeasurementIdForOrderItem(
+          tx,
+          {
+            tenantId: params.tenantId,
+            customerId: nextCustomerId,
+            actorUserId: params.actorUserId,
+            item,
+          },
+        );
+
+        await tx.orderItem.create({
+          data: {
+            tenantId: params.tenantId,
+            orderId: existingOrder.id,
+
+            categoryId: item.categoryId,
+            blockId: item.blockId || undefined,
+            measurementId: finalMeasurementId || undefined,
+
+            itemDescription:
+              this.clean(item.itemDescription) ?? 'Tailoring item',
+
+            quantity,
+            unitPrice,
+            lineTotal,
+
+            notes: item.notes === null ? null : this.clean(item.notes),
+            tailorNote:
+              item.tailorNote === null ? null : this.clean(item.tailorNote),
+
+            status: item.status ?? 'PENDING',
+
+            createdById: params.actorUserId,
+            updatedById: params.actorUserId,
+          },
+        });
+      }
+    }
+
+    return order;
+  });
+
+  const affectedGroupOrderIds = new Set<string>();
+
+  if (existingOrder.groupOrderId) {
+    affectedGroupOrderIds.add(existingOrder.groupOrderId);
+  }
+
+  if (updatedOrder.groupOrderId) {
+    affectedGroupOrderIds.add(updatedOrder.groupOrderId);
+  }
+
+  for (const groupOrderId of affectedGroupOrderIds) {
+    await this.groupOrdersService.recalculateGroupOrderTotals({
+      tenantId: params.tenantId,
+      groupOrderId,
+    });
+  }
+
+  await this.auditService.log({
+    tenantId: params.tenantId,
+    actorUserId: params.actorUserId,
+    action: AuditAction.UPDATE,
+    entityType: 'order',
+    entityId: updatedOrder.id,
+    metadata: {
+      orderNumber: updatedOrder.orderNumber,
+      previousStatus: existingOrder.status,
+      nextStatus: updatedOrder.status,
+      previousGroupOrderId: existingOrder.groupOrderId,
+      nextGroupOrderId: updatedOrder.groupOrderId,
+      itemCount: params.items?.length ?? existingOrder.items.length,
+    },
+  });
+
+  return this.getOrderById({
+    id: updatedOrder.id,
+    tenantId: params.tenantId,
+  });
+}
+
+  async deleteOrder(params: {
+    tenantId: string;
+    id: string;
+    actorUserId: string;
+  }) {
+    const existingOrder = await this.prisma.order.findFirst({
+      where: {
+        id: params.id,
+        tenantId: params.tenantId,
+      },
+      include: {
+        items: true,
+      },
+    });
+
+    if (!existingOrder) {
+      throw new NotFoundException("Order not found.");
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.orderItem.deleteMany({
+        where: {
+          tenantId: params.tenantId,
+          orderId: existingOrder.id,
+        },
+      });
+
+      await tx.order.delete({
+        where: {
+          id: existingOrder.id,
+        },
+      });
+    });
+
+    if (existingOrder.groupOrderId) {
+      await this.groupOrdersService.recalculateGroupOrderTotals({
+        tenantId: params.tenantId,
+        groupOrderId: existingOrder.groupOrderId,
+      });
+    }
+
+    await this.auditService.log({
+      tenantId: params.tenantId,
+      actorUserId: params.actorUserId,
+      action: AuditAction.DELETE,
+      entityType: "order",
+      entityId: existingOrder.id,
+      metadata: {
+        orderNumber: existingOrder.orderNumber,
+        itemCount: existingOrder.items.length,
+      },
+    });
+
+    return {
+      success: true,
+      message: "Order deleted successfully.",
+    };
+  }
+
+  private async resolveMeasurementIdForOrderItem(
+    tx: Prisma.TransactionClient,
+    params: {
+      tenantId: string;
+      customerId: string;
+      actorUserId: string;
+      item: OrderItemInput;
+    },
+  ) {
+    const { tenantId, customerId, actorUserId, item } = params;
+
+    if (item.measurementId) {
+      const existingMeasurement = await tx.measurement.findFirst({
+        where: {
+          id: item.measurementId,
+          tenantId,
+          customerId,
+          categoryId: item.categoryId,
+          isActive: true,
+          ...(item.blockId ? { blockId: item.blockId } : {}),
+        },
+      });
+
+      if (!existingMeasurement) {
+        throw new BadRequestException(
+          `Invalid measurementId for item: ${
+            this.clean(item.itemDescription) ?? item.categoryId
+          }.`,
+        );
+      }
+
+      return existingMeasurement.id;
+    }
+
+    const hasMeasurementValues =
+      item.measurements &&
+      Object.values(item.measurements).some(
+        (value) => value !== undefined && value !== null && value !== "",
+      );
+
+    if (!hasMeasurementValues) {
+      return null;
+    }
+
+    const category = await tx.category.findFirst({
+      where: {
+        id: item.categoryId,
+        tenantId,
+        isActive: true,
+      },
+    });
+
+    if (!category) {
+      throw new BadRequestException(
+        `Invalid categoryId for item: ${
+          this.clean(item.itemDescription) ?? item.categoryId
+        }.`,
+      );
+    }
+
+    if (item.blockId) {
+      const block = await tx.block.findFirst({
+        where: {
+          id: item.blockId,
+          tenantId,
+          categoryId: item.categoryId,
+        },
+      });
+
+      if (!block) {
+        throw new BadRequestException(
+          `Invalid blockId for item: ${
+            this.clean(item.itemDescription) ?? item.blockId
+          }.`,
+        );
+      }
+    }
+
+    const measurementFields = await tx.measurementField.findMany({
+      where: {
+        tenantId,
+        categoryId: item.categoryId,
+        isActive: true,
+      },
+      orderBy: {
+        sortOrder: "asc",
+      },
+    });
+
+    if (!measurementFields.length) {
+      throw new BadRequestException(
+        `No measurement fields configured for category "${category.name}".`,
+      );
+    }
+
+    const fieldsByCode = new Map(
+      measurementFields.map((field) => [field.code, field]),
+    );
+
+    const valuesToCreate = Object.entries(item.measurements ?? {})
+      .map(([fieldCode, rawValue]) => {
+        const field = fieldsByCode.get(fieldCode);
+
+        if (!field) {
+          throw new BadRequestException(
+            `Invalid measurement field code "${fieldCode}" for category "${category.name}".`,
+          );
+        }
+
+        const value =
+          rawValue === undefined || rawValue === null
+            ? null
+            : String(rawValue).trim();
+
+        if (!value) return null;
+
+        return {
+          field,
+          value,
+        };
+      })
+      .filter(
+        (
+          entry,
+        ): entry is {
+          field: (typeof measurementFields)[number];
+          value: string;
+        } => Boolean(entry),
+      );
+
+    if (!valuesToCreate.length) {
+      return null;
+    }
+
+    const previousLatestMeasurement = await tx.measurement.findFirst({
+      where: {
+        tenantId,
+        customerId,
+        categoryId: item.categoryId,
+        blockId: item.blockId || null,
+        isActive: true,
+      },
+      orderBy: [{ versionNo: "desc" }, { createdAt: "desc" }],
+    });
+
+    if (previousLatestMeasurement) {
+      await tx.measurement.update({
+        where: {
+          id: previousLatestMeasurement.id,
+        },
+        data: {
+          isActive: false,
+          updatedById: actorUserId,
+        },
+      });
+    }
+
+    const measurementNumber = await this.generateMeasurementNumber(
+      tx,
+      tenantId,
+    );
+
+    const newMeasurement = await tx.measurement.create({
+      data: {
+        tenantId,
+        customerId,
+        blockId: item.blockId || null,
+        categoryId: item.categoryId,
+
+        measurementNumber,
+        verificationStatus: "NOT_VERIFIED",
+        verificationNote:
+          item.measurementNote || "Measurement created while placing order.",
+
+        isActive: true,
+        versionNo: previousLatestMeasurement
+          ? previousLatestMeasurement.versionNo + 1
+          : 1,
+
+        previousMeasurementId: previousLatestMeasurement?.id || null,
+        notes: item.measurementNote || null,
+
+        createdById: actorUserId,
+        updatedById: actorUserId,
+      },
+    });
+
+    await tx.measurementValue.createMany({
+      data: valuesToCreate.map(({ field, value }) => ({
+        tenantId,
+        measurementId: newMeasurement.id,
+        fieldId: field.id,
+        value,
+        numericValue: this.getNumericValue(value, field.inputType),
+        note: null,
+        createdById: actorUserId,
+        updatedById: actorUserId,
+      })),
+    });
+
+    return newMeasurement.id;
   }
 
   private async validateCustomer(params: {
@@ -654,14 +1047,13 @@ export class OrdersService {
         id: params.customerId,
         tenantId: params.tenantId,
       },
-      select: {
-        id: true,
-      },
     });
 
     if (!customer) {
       throw new NotFoundException("Customer not found.");
     }
+
+    return customer;
   }
 
   private async validateGroupOrder(params: {
@@ -673,230 +1065,200 @@ export class OrdersService {
         id: params.groupOrderId,
         tenantId: params.tenantId,
       },
-      select: {
-        id: true,
-      },
     });
 
     if (!groupOrder) {
       throw new NotFoundException("Group order not found.");
     }
+
+    return groupOrder;
   }
 
   private async validateOrderItems(params: {
     tenantId: string;
+    customerId: string;
     items: OrderItemInput[];
   }) {
-    const categoryIds = [
-      ...new Set(params.items.map((item) => item.categoryId).filter(Boolean)),
-    ];
+    for (const item of params.items) {
+      if (!item.categoryId) {
+        throw new BadRequestException("Category is required for order item.");
+      }
 
-    const blockIds = [
-      ...new Set(
-        params.items
-          .map((item) => item.blockId)
-          .filter((value): value is string => Boolean(value)),
-      ),
-    ];
+      const category = await this.prisma.category.findFirst({
+        where: {
+          id: item.categoryId,
+          tenantId: params.tenantId,
+          isActive: true,
+        },
+      });
 
-    const measurementIds = [
-      ...new Set(
-        params.items
-          .map((item) => item.measurementId)
-          .filter((value): value is string => Boolean(value)),
-      ),
-    ];
+      if (!category) {
+        throw new BadRequestException(`Invalid categoryId: ${item.categoryId}.`);
+      }
 
-    const validCategoryCount = await this.prisma.category.count({
-      where: {
-        tenantId: params.tenantId,
-        id: {
-          in: categoryIds,
+      if (item.blockId) {
+        const block = await this.prisma.block.findFirst({
+          where: {
+            id: item.blockId,
+            tenantId: params.tenantId,
+            categoryId: item.categoryId,
+          },
+        });
+
+        if (!block) {
+          throw new BadRequestException(`Invalid blockId: ${item.blockId}.`);
+        }
+      }
+
+      if (item.measurementId) {
+        const measurement = await this.prisma.measurement.findFirst({
+          where: {
+            id: item.measurementId,
+            tenantId: params.tenantId,
+            customerId: params.customerId,
+            categoryId: item.categoryId,
+            isActive: true,
+            ...(item.blockId ? { blockId: item.blockId } : {}),
+          },
+        });
+
+        if (!measurement) {
+          throw new BadRequestException(
+            `Invalid measurementId: ${item.measurementId}.`,
+          );
+        }
+      }
+
+      const hasMeasurementValues =
+        item.measurements &&
+        Object.values(item.measurements).some(
+          (value) => value !== undefined && value !== null && value !== "",
+        );
+
+      if (!item.measurementId && hasMeasurementValues) {
+        const fieldCodes = Object.keys(item.measurements ?? {});
+
+        const validFieldCount = await this.prisma.measurementField.count({
+          where: {
+            tenantId: params.tenantId,
+            categoryId: item.categoryId,
+            code: {
+              in: fieldCodes,
+            },
+            isActive: true,
+          },
+        });
+
+        if (validFieldCount !== fieldCodes.length) {
+          throw new BadRequestException(
+            `One or more measurement field codes are invalid for category "${category.name}".`,
+          );
+        }
+      }
+    }
+  }
+
+  private orderInclude() {
+    return {
+      customer: true,
+      groupOrder: true,
+      items: {
+        include: {
+          category: true,
+          block: true,
+          measurement: {
+            include: {
+              values: {
+                include: {
+                  field: true,
+                },
+                orderBy: {
+                  field: {
+                    sortOrder: "asc" as const,
+                  },
+                },
+              },
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "asc" as const,
         },
       },
-    });
-
-    if (validCategoryCount !== categoryIds.length) {
-      throw new NotFoundException("One or more categories were not found.");
-    }
-
-    if (blockIds.length) {
-      const validBlockCount = await this.prisma.block.count({
-        where: {
-          tenantId: params.tenantId,
-          id: {
-            in: blockIds,
-          },
+      _count: {
+        select: {
+          items: true,
         },
-      });
-
-      if (validBlockCount !== blockIds.length) {
-        throw new NotFoundException("One or more blocks were not found.");
-      }
-    }
-
-    if (measurementIds.length) {
-      const validMeasurementCount = await this.prisma.measurement.count({
-        where: {
-          tenantId: params.tenantId,
-          id: {
-            in: measurementIds,
-          },
-        },
-      });
-
-      if (validMeasurementCount !== measurementIds.length) {
-        throw new NotFoundException(
-          "One or more measurements were not found.",
-        );
-      }
-    }
+      },
+    } satisfies Prisma.OrderInclude;
   }
 
   private resolvePaymentStatus(
     advanceAmount: number,
     balanceAmount: number,
   ): PaymentStatusValue {
-    if (advanceAmount <= 0) {
-      return "UNPAID";
-    }
-
-    if (balanceAmount <= 0) {
-      return "PAID";
-    }
-
-    return "ADVANCE_PAID";
+    if (balanceAmount <= 0) return "PAID";
+    if (advanceAmount > 0 && balanceAmount > 0) return "ADVANCE_PAID";
+    return "UNPAID";
   }
 
-  private listInclude() {
-    return {
-      customer: true,
-      groupOrder: {
-        select: {
-          id: true,
-          groupOrderNumber: true,
-          title: true,
-          hospitalName: true,
-          town: true,
-          contactName: true,
-          contactPhone: true,
-          status: true,
-          totalOrders: true,
-          totalQty: true,
-          totalAmount: true,
-          advanceAmount: true,
-          balanceAmount: true,
-          coordinatorCustomer: {
-            select: {
-              id: true,
-              fullName: true,
-              phoneNumber: true,
-              town: true,
-              hospitalName: true,
-            },
-          },
-        },
-      },
-      items: {
-        include: {
-          category: true,
-          block: {
-            include: {
-              category: true,
-            },
-          },
-          measurement: {
-            include: {
-              values: {
-                include: {
-                  field: true,
-                },
-              },
-            },
-          },
-        },
-      },
-      payments: true,
-      _count: {
-        select: {
-          items: true,
-          payments: true,
-        },
-      },
-    } satisfies Prisma.OrderInclude;
+  private getNumericValue(value: string | null, inputType?: string | null) {
+    if (!value) return null;
+
+    const isNumericInput =
+      inputType === "DECIMAL" ||
+      inputType === "NUMBER" ||
+      inputType === "INTEGER";
+
+    if (!isNumericInput) return null;
+
+    const parsed = Number(value);
+
+    if (Number.isNaN(parsed)) return null;
+
+    return new Prisma.Decimal(parsed);
   }
 
-  private detailInclude() {
-    return {
-      customer: true,
-      groupOrder: {
-        include: {
-          coordinatorCustomer: true,
-          orders: {
-            include: {
-              customer: true,
-              items: {
-                include: {
-                  category: true,
-                },
-              },
-              payments: true,
-            },
-            orderBy: {
-              createdAt: "desc",
-            },
-          },
-          payments: {
-            orderBy: {
-              paymentDate: "desc",
-            },
-          },
-        },
+  private async generateOrderNumber(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+  ) {
+    const count = await tx.order.count({
+      where: {
+        tenantId,
       },
-      payments: {
-        orderBy: {
-          paymentDate: "desc",
-        },
+    });
+
+    return `ORD-${String(count + 1).padStart(5, "0")}`;
+  }
+
+  private async generateMeasurementNumber(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+  ) {
+    const count = await tx.measurement.count({
+      where: {
+        tenantId,
       },
-      items: {
-        include: {
-          category: true,
-          block: {
-            include: {
-              category: true,
-              customerBlocks: {
-                include: {
-                  customer: true,
-                },
-                orderBy: [{ isDefault: "desc" }, { assignedAt: "asc" }],
-              },
-            },
-          },
-          measurement: {
-            include: {
-              values: {
-                include: {
-                  field: true,
-                },
-              },
-            },
-          },
-        },
-        orderBy: {
-          createdAt: "asc",
-        },
-      },
-      _count: {
-        select: {
-          items: true,
-          payments: true,
-        },
-      },
-    } satisfies Prisma.OrderInclude;
+    });
+
+    return `MSR-${String(count + 1).padStart(5, "0")}`;
   }
 
   private clean(value?: string | null) {
     const cleaned = value?.trim();
     return cleaned ? cleaned : undefined;
+  }
+
+  private startOfDay(value: string) {
+    const date = new Date(value);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  }
+
+  private endOfDay(value: string) {
+    const date = new Date(value);
+    date.setHours(23, 59, 59, 999);
+    return date;
   }
 }

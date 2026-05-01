@@ -256,6 +256,7 @@ model Tenant {
   measurementFields MeasurementField[]
   measurements      Measurement[]
   orders            Order[]
+  orderItems OrderItem[]
   groupOrders       GroupOrder[]
   payments          Payment[]
   employees         Employee[]
@@ -299,6 +300,9 @@ model User {
 
   createdGroupOrders GroupOrder[] @relation("GroupOrderCreatedBy")
   updatedGroupOrders GroupOrder[] @relation("GroupOrderUpdatedBy")
+
+  createdOrderItems OrderItem[] @relation("OrderItemCreatedBy")
+  updatedOrderItems OrderItem[] @relation("OrderItemUpdatedBy")
 
   createdPayments Payment[] @relation("PaymentCreatedBy")
   updatedPayments Payment[] @relation("PaymentUpdatedBy")
@@ -565,7 +569,7 @@ model Measurement {
   id         String @id @default(cuid())
   tenantId   String
   customerId String
-  blockId    String
+  blockId    String?
   categoryId String
 
   measurementNumber String?
@@ -588,7 +592,7 @@ model Measurement {
 
   tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  block    Block    @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  block    Block?    @relation(fields: [blockId], references: [id], onDelete: Cascade)
   category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
   previousMeasurement Measurement?  @relation("MeasurementVersions", fields: [previousMeasurementId], references: [id], onDelete: SetNull)
@@ -762,6 +766,8 @@ model Order {
 model OrderItem {
   id         String @id @default(cuid())
   orderId    String
+  tenantId   String
+
   categoryId String
 
   blockId       String?
@@ -778,19 +784,26 @@ model OrderItem {
 
   status OrderItemStatus @default(PENDING)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+  updatedById String?
 
-  order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  category    Category     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  block       Block?       @relation(fields: [blockId], references: [id], onDelete: SetNull)
-  measurement Measurement? @relation(fields: [measurementId], references: [id], onDelete: SetNull)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  category    Category     @relation(fields: [categoryId], references: [id])
+  block       Block?       @relation(fields: [blockId], references: [id])
+  measurement Measurement? @relation(fields: [measurementId], references: [id])
+
+  createdBy User? @relation("OrderItemCreatedBy", fields: [createdById], references: [id])
+  updatedBy User? @relation("OrderItemUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([tenantId])
   @@index([orderId])
   @@index([categoryId])
   @@index([blockId])
   @@index([measurementId])
-  @@index([status])
 }
 
 /**

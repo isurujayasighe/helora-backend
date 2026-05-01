@@ -15,6 +15,7 @@ import { RolesService } from '../roles/roles.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { AuditService } from '../audit/audit.service';
 import { CurrentUserContext } from '../common/types/current-user-context.type';
+import { use } from 'passport';
 
 @Injectable()
 export class AuthService {

@@ -555,35 +555,43 @@ export class MeasurementsService {
     }
   }
 
-  private async validateMeasurementOwnerData(params: {
-    tenantId: string;
-    customerId: string;
-    blockId: string;
-    categoryId: string;
-  }) {
-    const [customer, category, block] = await Promise.all([
-      this.prisma.customer.findFirst({
-        where: { id: params.customerId, tenantId: params.tenantId },
-        select: { id: true },
-      }),
-      this.prisma.category.findFirst({
-        where: { id: params.categoryId, tenantId: params.tenantId },
-        select: { id: true },
-      }),
-      this.prisma.block.findFirst({
-        where: {
-          id: params.blockId,
-          tenantId: params.tenantId,
-          categoryId: params.categoryId,
-          customerBlocks: {
-            some: {
-              customerId: params.customerId,
-            },
-          },
-        },
-        select: { id: true },
-      }),
-    ]);
+ private async validateMeasurementOwnerData(params: {
+  tenantId: string;
+  customerId: string;
+  blockId?: string | null;
+  categoryId: string;
+}) {
+  const customer = await this.prisma.customer.findFirst({
+    where: {
+      id: params.customerId,
+      tenantId: params.tenantId,
+    },
+  });
+
+  if (!customer) {
+    throw new BadRequestException("Invalid customerId.");
+  }
+
+  const category = await this.prisma.category.findFirst({
+    where: {
+      id: params.categoryId,
+      tenantId: params.tenantId,
+      isActive: true,
+    },
+  });
+
+  if (!category) {
+    throw new BadRequestException("Invalid categoryId.");
+  }
+
+  if (params.blockId) {
+    const block = await this.prisma.block.findFirst({
+      where: {
+        id: params.blockId,
+        tenantId: params.tenantId,
+        categoryId: params.categoryId,
+      },
+    });
 
     if (!customer) throw new NotFoundException('Customer not found.');
     if (!category) throw new NotFoundException('Category not found.');
@@ -592,7 +600,7 @@ export class MeasurementsService {
         'Block not found for this tenant/category/customer assignment.',
       );
     }
-  }
+  }}
 
   private async validateMeasurementValues(params: {
     tenantId: string;
@@ -671,83 +679,100 @@ export class MeasurementsService {
   }
 
   private measurementInclude(options?: {
-    includeVersions?: boolean;
-    includeOrders?: boolean;
-  }) {
-    return {
-      customer: true,
-      block: {
-        include: {
-          category: true,
-        },
-      },
-      category: true,
-      verifiedBy: {
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-        },
-      },
-      values: {
-        include: {
-          field: true,
-        },
-        orderBy: {
-          field: {
-            sortOrder: 'asc' as const,
+  includeVersions?: boolean;
+  includeOrders?: boolean;
+}) {
+  return {
+    customer: {
+      include: {
+        _count: {
+          select: {
+            customerBlocks: true,
+            orders: true,
           },
         },
       },
-      previousMeasurement: options?.includeVersions
-        ? {
-            select: {
-              id: true,
-              measurementNumber: true,
-              versionNo: true,
-              verificationStatus: true,
-              createdAt: true,
-            },
-          }
-        : false,
-      nextMeasurements: options?.includeVersions
-        ? {
-            select: {
-              id: true,
-              measurementNumber: true,
-              versionNo: true,
-              verificationStatus: true,
-              createdAt: true,
-            },
-            orderBy: {
-              versionNo: 'asc' as const,
-            },
-          }
-        : false,
-      orderItems: options?.includeOrders
-        ? {
-            include: {
-              order: {
-                include: {
-                  customer: true,
-                  groupOrder: true,
-                },
-              },
-              category: true,
-            },
-            orderBy: {
-              createdAt: 'desc' as const,
-            },
-          }
-        : false,
-      _count: {
-        select: {
-          orderItems: true,
+    },
+
+    block: {
+      include: {
+        category: true,
+      },
+    },
+
+    category: true,
+
+    verifiedBy: {
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+      },
+    },
+
+    values: {
+      include: {
+        field: true,
+      },
+      orderBy: {
+        field: {
+          sortOrder: "asc" as const,
         },
       },
-    } satisfies Prisma.MeasurementInclude;
-  }
+    },
+
+    previousMeasurement: options?.includeVersions
+      ? {
+          select: {
+            id: true,
+            measurementNumber: true,
+            versionNo: true,
+            verificationStatus: true,
+            createdAt: true,
+          },
+        }
+      : false,
+
+    nextMeasurements: options?.includeVersions
+      ? {
+          select: {
+            id: true,
+            measurementNumber: true,
+            versionNo: true,
+            verificationStatus: true,
+            createdAt: true,
+          },
+          orderBy: {
+            versionNo: "asc" as const,
+          },
+        }
+      : false,
+
+    orderItems: options?.includeOrders
+      ? {
+          include: {
+            order: {
+              include: {
+                customer: true,
+                groupOrder: true,
+              },
+            },
+            category: true,
+          },
+          orderBy: {
+            createdAt: "desc" as const,
+          },
+        }
+      : false,
+
+    _count: {
+      select: {
+        orderItems: true,
+      },
+    },
+  } satisfies Prisma.MeasurementInclude;
+}
 
   private paginate<T>(params: {
     items: T[];
